@@ -1,13 +1,19 @@
-GearSimulator v1.0.3 distribution
+GearSimulator v1.0.3
 
-py/GearSimulator
-- Python source distribution.
-- Start with run_gui.bat after installing dependencies.
+FF14 用の装備・マテリア・食事シミュレーターです。
+このフォルダは v1.0.3 の配布用ファイルです。
+
+配布内容
 
 exe/GearSimulator.exe
-- Self-contained Windows executable distribution.
-- Static application data is bundled inside the exe.
-- Start GearSimulator.exe directly.
-- config and cache folders are created automatically next to the exe on first run if needed.
+- Windows 向けの単体実行ファイルです。
+- アプリに必要な静的データは exe に内包されています。
+- 起動時に必要であれば、exe と同じ場所に config と cache フォルダを自動生成します。
 
-Personal data, FFLogs credentials, saved sets, and FFLogs private cache files are not included.
+py/GearSimulator
+- Python 版の配布ファイルです。
+- 依存関係をインストールした後、run_gui.bat から起動できます。
+
+補足
+- 個人情報は含めていません。
+- FFLogs のクライアントID、クライアントシークレット、保存セット、private cache は含めていません。
