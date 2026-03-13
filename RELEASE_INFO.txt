@@ -1,0 +1,11 @@
+GearSimulator Release
+Version: 1.0.3
+Author: Ino
+
+Folders:
+- py/GearSimulator : Python source distribution
+- exe/GearSimulator.exe : self-contained Windows executable distribution
+
+Personal data has been removed from the release config files.
+FFLogs private caches are not included.
+The exe creates config/cache folders automatically on first run if needed.

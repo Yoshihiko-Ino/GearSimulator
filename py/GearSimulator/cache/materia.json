@@ -1,0 +1,2125 @@
+{
+  "1": [
+    {
+      "name": "Strength Materia I",
+      "name_ja": "剛力のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5604,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020205_hr1.tex&format=webp"
+    },
+    {
+      "name": "Strength Materia II",
+      "name_ja": "剛力のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5605,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020206_hr1.tex&format=webp"
+    },
+    {
+      "name": "Strength Materia III",
+      "name_ja": "剛力のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5606,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020207_hr1.tex&format=webp"
+    },
+    {
+      "name": "Strength Materia IV",
+      "name_ja": "剛力のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5607,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020208_hr1.tex&format=webp"
+    },
+    {
+      "name": "Strength Materia V",
+      "name_ja": "剛力のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5608,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020254_hr1.tex&format=webp"
+    },
+    {
+      "name": "Strength Materia VI",
+      "name_ja": "剛力のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18006,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020263_hr1.tex&format=webp"
+    }
+  ],
+  "3": [
+    {
+      "name": "Vitality Materia I",
+      "name_ja": "活力のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5609,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020205_hr1.tex&format=webp"
+    },
+    {
+      "name": "Vitality Materia II",
+      "name_ja": "活力のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5610,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020206_hr1.tex&format=webp"
+    },
+    {
+      "name": "Vitality Materia III",
+      "name_ja": "活力のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5611,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020207_hr1.tex&format=webp"
+    },
+    {
+      "name": "Vitality Materia IV",
+      "name_ja": "活力のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5612,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020208_hr1.tex&format=webp"
+    },
+    {
+      "name": "Vitality Materia V",
+      "name_ja": "活力のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5613,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020254_hr1.tex&format=webp"
+    },
+    {
+      "name": "Vitality Materia VI",
+      "name_ja": "活力のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18007,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020263_hr1.tex&format=webp"
+    }
+  ],
+  "2": [
+    {
+      "name": "Dexterity Materia I",
+      "name_ja": "眼力のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5614,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020205_hr1.tex&format=webp"
+    },
+    {
+      "name": "Dexterity Materia II",
+      "name_ja": "眼力のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5615,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020206_hr1.tex&format=webp"
+    },
+    {
+      "name": "Dexterity Materia III",
+      "name_ja": "眼力のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5616,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020207_hr1.tex&format=webp"
+    },
+    {
+      "name": "Dexterity Materia IV",
+      "name_ja": "眼力のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5617,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020208_hr1.tex&format=webp"
+    },
+    {
+      "name": "Dexterity Materia V",
+      "name_ja": "眼力のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5618,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020254_hr1.tex&format=webp"
+    },
+    {
+      "name": "Dexterity Materia VI",
+      "name_ja": "眼力のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18008,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020263_hr1.tex&format=webp"
+    }
+  ],
+  "4": [
+    {
+      "name": "Intelligence Materia I",
+      "name_ja": "知力のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5619,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020205_hr1.tex&format=webp"
+    },
+    {
+      "name": "Intelligence Materia II",
+      "name_ja": "知力のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5620,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020206_hr1.tex&format=webp"
+    },
+    {
+      "name": "Intelligence Materia III",
+      "name_ja": "知力のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5621,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020207_hr1.tex&format=webp"
+    },
+    {
+      "name": "Intelligence Materia IV",
+      "name_ja": "知力のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5622,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020208_hr1.tex&format=webp"
+    },
+    {
+      "name": "Intelligence Materia V",
+      "name_ja": "知力のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5623,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020254_hr1.tex&format=webp"
+    },
+    {
+      "name": "Intelligence Materia VI",
+      "name_ja": "知力のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18009,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020263_hr1.tex&format=webp"
+    }
+  ],
+  "5": [
+    {
+      "name": "Mind Materia I",
+      "name_ja": "心力のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5624,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020205_hr1.tex&format=webp"
+    },
+    {
+      "name": "Mind Materia II",
+      "name_ja": "心力のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5625,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020206_hr1.tex&format=webp"
+    },
+    {
+      "name": "Mind Materia III",
+      "name_ja": "心力のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5626,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020207_hr1.tex&format=webp"
+    },
+    {
+      "name": "Mind Materia IV",
+      "name_ja": "心力のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5627,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020208_hr1.tex&format=webp"
+    },
+    {
+      "name": "Mind Materia V",
+      "name_ja": "心力のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5628,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020254_hr1.tex&format=webp"
+    },
+    {
+      "name": "Mind Materia VI",
+      "name_ja": "心力のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18010,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020263_hr1.tex&format=webp"
+    }
+  ],
+  "6": [
+    {
+      "name": "Piety Materia I",
+      "name_ja": "信力のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5629,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020213_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia II",
+      "name_ja": "信力のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5630,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020214_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia III",
+      "name_ja": "信力のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5631,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020215_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia IV",
+      "name_ja": "信力のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5632,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020216_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia V",
+      "name_ja": "信力のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5633,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020256_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia VI",
+      "name_ja": "信力のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18011,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020262_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia VII",
+      "name_ja": "信力のメガマテリジャ",
+      "grade": 7,
+      "value": 8,
+      "item_id": 25186,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020273_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia VIII",
+      "name_ja": "信力のエクスマテリジャ",
+      "grade": 8,
+      "value": 24,
+      "item_id": 26727,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020278_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia IX",
+      "name_ja": "信力のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33917,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020281_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia X",
+      "name_ja": "信力のアルテマテリジャ",
+      "grade": 10,
+      "value": 36,
+      "item_id": 33930,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020286_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia XI",
+      "name_ja": "信力のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 18,
+      "item_id": 41757,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020291_hr1.tex&format=webp"
+    },
+    {
+      "name": "Piety Materia XII",
+      "name_ja": "信力のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 54,
+      "item_id": 41770,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020292_hr1.tex&format=webp"
+    }
+  ],
+  "37": [
+    {
+      "name": "Fire Materia I",
+      "name_ja": "防火のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5634,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020229_hr1.tex&format=webp"
+    },
+    {
+      "name": "Fire Materia II",
+      "name_ja": "防火のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5635,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020230_hr1.tex&format=webp"
+    },
+    {
+      "name": "Fire Materia III",
+      "name_ja": "防火のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5636,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020231_hr1.tex&format=webp"
+    },
+    {
+      "name": "Fire Materia IV",
+      "name_ja": "防火のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5637,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020232_hr1.tex&format=webp"
+    },
+    {
+      "name": "Fire Materia V",
+      "name_ja": "防火のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5638,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020260_hr1.tex&format=webp"
+    },
+    {
+      "name": "Fire Materia VI",
+      "name_ja": "防火のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18012,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020268_hr1.tex&format=webp"
+    }
+  ],
+  "38": [
+    {
+      "name": "Ice Materia I",
+      "name_ja": "防氷のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5639,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020229_hr1.tex&format=webp"
+    },
+    {
+      "name": "Ice Materia II",
+      "name_ja": "防氷のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5640,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020230_hr1.tex&format=webp"
+    },
+    {
+      "name": "Ice Materia III",
+      "name_ja": "防氷のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5641,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020231_hr1.tex&format=webp"
+    },
+    {
+      "name": "Ice Materia IV",
+      "name_ja": "防氷のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5642,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020232_hr1.tex&format=webp"
+    },
+    {
+      "name": "Ice Materia V",
+      "name_ja": "防氷のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5643,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020260_hr1.tex&format=webp"
+    },
+    {
+      "name": "Ice Materia VI",
+      "name_ja": "防氷のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18013,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020268_hr1.tex&format=webp"
+    }
+  ],
+  "39": [
+    {
+      "name": "Wind Materia I",
+      "name_ja": "防風のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5644,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020229_hr1.tex&format=webp"
+    },
+    {
+      "name": "Wind Materia II",
+      "name_ja": "防風のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5645,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020230_hr1.tex&format=webp"
+    },
+    {
+      "name": "Wind Materia III",
+      "name_ja": "防風のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5646,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020231_hr1.tex&format=webp"
+    },
+    {
+      "name": "Wind Materia IV",
+      "name_ja": "防風のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5647,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020232_hr1.tex&format=webp"
+    },
+    {
+      "name": "Wind Materia V",
+      "name_ja": "防風のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5648,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020260_hr1.tex&format=webp"
+    },
+    {
+      "name": "Wind Materia VI",
+      "name_ja": "防風のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18014,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020268_hr1.tex&format=webp"
+    }
+  ],
+  "40": [
+    {
+      "name": "Earth Materia I",
+      "name_ja": "防土のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5649,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020229_hr1.tex&format=webp"
+    },
+    {
+      "name": "Earth Materia II",
+      "name_ja": "防土のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5650,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020230_hr1.tex&format=webp"
+    },
+    {
+      "name": "Earth Materia III",
+      "name_ja": "防土のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5651,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020231_hr1.tex&format=webp"
+    },
+    {
+      "name": "Earth Materia IV",
+      "name_ja": "防土のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5652,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020232_hr1.tex&format=webp"
+    },
+    {
+      "name": "Earth Materia V",
+      "name_ja": "防土のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5653,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020260_hr1.tex&format=webp"
+    },
+    {
+      "name": "Earth Materia VI",
+      "name_ja": "防土のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18015,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020268_hr1.tex&format=webp"
+    }
+  ],
+  "41": [
+    {
+      "name": "Lightning Materia I",
+      "name_ja": "防雷のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5654,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020229_hr1.tex&format=webp"
+    },
+    {
+      "name": "Lightning Materia II",
+      "name_ja": "防雷のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5655,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020230_hr1.tex&format=webp"
+    },
+    {
+      "name": "Lightning Materia III",
+      "name_ja": "防雷のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5656,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020231_hr1.tex&format=webp"
+    },
+    {
+      "name": "Lightning Materia IV",
+      "name_ja": "防雷のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5657,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020232_hr1.tex&format=webp"
+    },
+    {
+      "name": "Lightning Materia V",
+      "name_ja": "防雷のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5658,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020260_hr1.tex&format=webp"
+    },
+    {
+      "name": "Lightning Materia VI",
+      "name_ja": "防雷のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18016,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020268_hr1.tex&format=webp"
+    }
+  ],
+  "42": [
+    {
+      "name": "Water Materia I",
+      "name_ja": "防水のマテリア",
+      "grade": 1,
+      "value": 0,
+      "item_id": 5659,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020229_hr1.tex&format=webp"
+    },
+    {
+      "name": "Water Materia II",
+      "name_ja": "防水のマテリラ",
+      "grade": 2,
+      "value": 0,
+      "item_id": 5660,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020230_hr1.tex&format=webp"
+    },
+    {
+      "name": "Water Materia III",
+      "name_ja": "防水のマテリダ",
+      "grade": 3,
+      "value": 0,
+      "item_id": 5661,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020231_hr1.tex&format=webp"
+    },
+    {
+      "name": "Water Materia IV",
+      "name_ja": "防水のマテリガ",
+      "grade": 4,
+      "value": 0,
+      "item_id": 5662,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020232_hr1.tex&format=webp"
+    },
+    {
+      "name": "Water Materia V",
+      "name_ja": "防水のマテリジャ",
+      "grade": 5,
+      "value": 0,
+      "item_id": 5663,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020260_hr1.tex&format=webp"
+    },
+    {
+      "name": "Water Materia VI",
+      "name_ja": "防水のハイマテリジャ",
+      "grade": 6,
+      "value": 0,
+      "item_id": 18017,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020268_hr1.tex&format=webp"
+    }
+  ],
+  "22": [
+    {
+      "name": "Heavens' Eye Materia I",
+      "name_ja": "天眼のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5664,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020221_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia II",
+      "name_ja": "天眼のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5665,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020222_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia III",
+      "name_ja": "天眼のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5666,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020223_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia IV",
+      "name_ja": "天眼のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5667,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020224_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia V",
+      "name_ja": "天眼のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5668,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020258_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia VI",
+      "name_ja": "天眼のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18018,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020267_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia VII",
+      "name_ja": "天眼のメガマテリジャ",
+      "grade": 7,
+      "value": 8,
+      "item_id": 25187,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020274_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia VIII",
+      "name_ja": "天眼のエクスマテリジャ",
+      "grade": 8,
+      "value": 24,
+      "item_id": 26728,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020279_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia IX",
+      "name_ja": "天眼のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33918,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020284_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia X",
+      "name_ja": "天眼のアルテマテリジャ",
+      "grade": 10,
+      "value": 36,
+      "item_id": 33931,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020289_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia XI",
+      "name_ja": "天眼のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 18,
+      "item_id": 41758,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020297_hr1.tex&format=webp"
+    },
+    {
+      "name": "Heavens' Eye Materia XII",
+      "name_ja": "天眼のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 54,
+      "item_id": 41771,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020298_hr1.tex&format=webp"
+    }
+  ],
+  "27": [
+    {
+      "name": "Savage Aim Materia I",
+      "name_ja": "武略のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5669,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020221_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia II",
+      "name_ja": "武略のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5670,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020222_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia III",
+      "name_ja": "武略のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5671,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020223_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia IV",
+      "name_ja": "武略のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5672,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020224_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia V",
+      "name_ja": "武略のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5673,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020258_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia VI",
+      "name_ja": "武略のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18019,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020267_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia VII",
+      "name_ja": "武略のメガマテリジャ",
+      "grade": 7,
+      "value": 8,
+      "item_id": 25188,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020274_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia VIII",
+      "name_ja": "武略のエクスマテリジャ",
+      "grade": 8,
+      "value": 24,
+      "item_id": 26729,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020279_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia IX",
+      "name_ja": "武略のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33919,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020284_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia X",
+      "name_ja": "武略のアルテマテリジャ",
+      "grade": 10,
+      "value": 36,
+      "item_id": 33932,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020289_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia XI",
+      "name_ja": "武略のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 18,
+      "item_id": 41759,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020297_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Aim Materia XII",
+      "name_ja": "武略のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 54,
+      "item_id": 41772,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020298_hr1.tex&format=webp"
+    }
+  ],
+  "44": [
+    {
+      "name": "Savage Might Materia I",
+      "name_ja": "雄略のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5674,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020221_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia II",
+      "name_ja": "雄略のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5675,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020222_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia III",
+      "name_ja": "雄略のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5676,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020223_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia IV",
+      "name_ja": "雄略のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5677,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020224_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia V",
+      "name_ja": "雄略のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5678,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020258_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia VI",
+      "name_ja": "雄略のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18020,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020267_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia VII",
+      "name_ja": "雄略のメガマテリジャ",
+      "grade": 7,
+      "value": 8,
+      "item_id": 25189,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020274_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia VIII",
+      "name_ja": "雄略のエクスマテリジャ",
+      "grade": 8,
+      "value": 24,
+      "item_id": 26730,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020279_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia IX",
+      "name_ja": "雄略のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33920,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020284_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia X",
+      "name_ja": "雄略のアルテマテリジャ",
+      "grade": 10,
+      "value": 36,
+      "item_id": 33933,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020289_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia XI",
+      "name_ja": "雄略のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 18,
+      "item_id": 41760,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020297_hr1.tex&format=webp"
+    },
+    {
+      "name": "Savage Might Materia XII",
+      "name_ja": "雄略のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 54,
+      "item_id": 41773,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020298_hr1.tex&format=webp"
+    }
+  ],
+  "19": [
+    {
+      "name": "Battledance Materia I",
+      "name_ja": "剛柔のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5679,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020213_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia II",
+      "name_ja": "剛柔のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5680,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020214_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia III",
+      "name_ja": "剛柔のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5681,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020215_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia IV",
+      "name_ja": "剛柔のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5682,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020216_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia V",
+      "name_ja": "剛柔のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5683,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020256_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia VI",
+      "name_ja": "剛柔のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18021,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020262_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia VII",
+      "name_ja": "剛柔のメガマテリジャ",
+      "grade": 7,
+      "value": 8,
+      "item_id": 25190,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020273_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia VIII",
+      "name_ja": "剛柔のエクスマテリジャ",
+      "grade": 8,
+      "value": 24,
+      "item_id": 26731,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020278_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia IX",
+      "name_ja": "剛柔のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33921,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020281_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia X",
+      "name_ja": "剛柔のアルテマテリジャ",
+      "grade": 10,
+      "value": 36,
+      "item_id": 33934,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020286_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia XI",
+      "name_ja": "剛柔のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 18,
+      "item_id": 41761,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020291_hr1.tex&format=webp"
+    },
+    {
+      "name": "Battledance Materia XII",
+      "name_ja": "剛柔のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 54,
+      "item_id": 41774,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020292_hr1.tex&format=webp"
+    }
+  ],
+  "72": [
+    {
+      "name": "Gatherer's Guerdon Materia I",
+      "name_ja": "達識のマテリア",
+      "grade": 1,
+      "value": 3,
+      "item_id": 5684,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020209_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia II",
+      "name_ja": "達識のマテリラ",
+      "grade": 2,
+      "value": 4,
+      "item_id": 5685,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020210_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia III",
+      "name_ja": "達識のマテリダ",
+      "grade": 3,
+      "value": 5,
+      "item_id": 5686,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020211_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia IV",
+      "name_ja": "達識のマテリガ",
+      "grade": 4,
+      "value": 6,
+      "item_id": 5687,
+      "item_ilvl": 55,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020212_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia V",
+      "name_ja": "達識のマテリジャ",
+      "grade": 5,
+      "value": 10,
+      "item_id": 5688,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020255_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia VI",
+      "name_ja": "達識のハイマテリジャ",
+      "grade": 6,
+      "value": 15,
+      "item_id": 18022,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020266_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia VII",
+      "name_ja": "達識のメガマテリジャ",
+      "grade": 7,
+      "value": 12,
+      "item_id": 25191,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020272_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia VIII",
+      "name_ja": "達識のエクスマテリジャ",
+      "grade": 8,
+      "value": 20,
+      "item_id": 26732,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020277_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia IX",
+      "name_ja": "達識のオメガマテリジャ",
+      "grade": 9,
+      "value": 14,
+      "item_id": 33922,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020283_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia X",
+      "name_ja": "達識のアルテマテリジャ",
+      "grade": 10,
+      "value": 25,
+      "item_id": 33935,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020288_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia XI",
+      "name_ja": "達識のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 20,
+      "item_id": 41762,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020295_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guerdon Materia XII",
+      "name_ja": "達識のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 36,
+      "item_id": 41775,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020296_hr1.tex&format=webp"
+    }
+  ],
+  "73": [
+    {
+      "name": "Gatherer's Guile Materia I",
+      "name_ja": "博識のマテリア",
+      "grade": 1,
+      "value": 3,
+      "item_id": 5689,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020209_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia II",
+      "name_ja": "博識のマテリラ",
+      "grade": 2,
+      "value": 4,
+      "item_id": 5690,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020210_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia III",
+      "name_ja": "博識のマテリダ",
+      "grade": 3,
+      "value": 5,
+      "item_id": 5691,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020211_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia IV",
+      "name_ja": "博識のマテリガ",
+      "grade": 4,
+      "value": 6,
+      "item_id": 5692,
+      "item_ilvl": 55,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020212_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia V",
+      "name_ja": "博識のマテリジャ",
+      "grade": 5,
+      "value": 10,
+      "item_id": 5693,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020255_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia VI",
+      "name_ja": "博識のハイマテリジャ",
+      "grade": 6,
+      "value": 15,
+      "item_id": 18023,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020266_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia VII",
+      "name_ja": "博識のメガマテリジャ",
+      "grade": 7,
+      "value": 12,
+      "item_id": 25192,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020272_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia VIII",
+      "name_ja": "博識のエクスマテリジャ",
+      "grade": 8,
+      "value": 20,
+      "item_id": 26733,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020277_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia IX",
+      "name_ja": "博識のオメガマテリジャ",
+      "grade": 9,
+      "value": 14,
+      "item_id": 33923,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020283_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia X",
+      "name_ja": "博識のアルテマテリジャ",
+      "grade": 10,
+      "value": 25,
+      "item_id": 33936,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020288_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia XI",
+      "name_ja": "博識のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 20,
+      "item_id": 41763,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020295_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Guile Materia XII",
+      "name_ja": "博識のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 36,
+      "item_id": 41776,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020296_hr1.tex&format=webp"
+    }
+  ],
+  "10": [
+    {
+      "name": "Gatherer's Grasp Materia I",
+      "name_ja": "器識のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5694,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020209_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia II",
+      "name_ja": "器識のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5695,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020210_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia III",
+      "name_ja": "器識のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5696,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020211_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia IV",
+      "name_ja": "器識のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5697,
+      "item_ilvl": 55,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020212_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia V",
+      "name_ja": "器識のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5698,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020255_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia VI",
+      "name_ja": "器識のハイマテリジャ",
+      "grade": 6,
+      "value": 8,
+      "item_id": 18024,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020266_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia VII",
+      "name_ja": "器識のメガマテリジャ",
+      "grade": 7,
+      "value": 7,
+      "item_id": 25193,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020272_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia VIII",
+      "name_ja": "器識のエクスマテリジャ",
+      "grade": 8,
+      "value": 9,
+      "item_id": 26734,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020277_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia IX",
+      "name_ja": "器識のオメガマテリジャ",
+      "grade": 9,
+      "value": 8,
+      "item_id": 33924,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020283_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia X",
+      "name_ja": "器識のアルテマテリジャ",
+      "grade": 10,
+      "value": 10,
+      "item_id": 33937,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020288_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia XI",
+      "name_ja": "器識のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 9,
+      "item_id": 41764,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020295_hr1.tex&format=webp"
+    },
+    {
+      "name": "Gatherer's Grasp Materia XII",
+      "name_ja": "器識のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 11,
+      "item_id": 41777,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020296_hr1.tex&format=webp"
+    }
+  ],
+  "70": [
+    {
+      "name": "Craftsman's Competence Materia I",
+      "name_ja": "名匠のマテリア",
+      "grade": 1,
+      "value": 3,
+      "item_id": 5699,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020201_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia II",
+      "name_ja": "名匠のマテリラ",
+      "grade": 2,
+      "value": 4,
+      "item_id": 5700,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020202_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia III",
+      "name_ja": "名匠のマテリダ",
+      "grade": 3,
+      "value": 5,
+      "item_id": 5701,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020203_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia IV",
+      "name_ja": "名匠のマテリガ",
+      "grade": 4,
+      "value": 6,
+      "item_id": 5702,
+      "item_ilvl": 55,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020204_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia V",
+      "name_ja": "名匠のマテリジャ",
+      "grade": 5,
+      "value": 11,
+      "item_id": 5703,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020253_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia VI",
+      "name_ja": "名匠のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18025,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020270_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia VII",
+      "name_ja": "名匠のメガマテリジャ",
+      "grade": 7,
+      "value": 14,
+      "item_id": 25194,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020271_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia VIII",
+      "name_ja": "名匠のエクスマテリジャ",
+      "grade": 8,
+      "value": 21,
+      "item_id": 26735,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020276_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia IX",
+      "name_ja": "名匠のオメガマテリジャ",
+      "grade": 9,
+      "value": 18,
+      "item_id": 33925,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020285_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia X",
+      "name_ja": "名匠のアルテマテリジャ",
+      "grade": 10,
+      "value": 27,
+      "item_id": 33938,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020290_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia XI",
+      "name_ja": "名匠のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 22,
+      "item_id": 41765,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020299_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Competence Materia XII",
+      "name_ja": "名匠のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 33,
+      "item_id": 41778,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020300_hr1.tex&format=webp"
+    }
+  ],
+  "11": [
+    {
+      "name": "Craftsman's Cunning Materia I",
+      "name_ja": "魔匠のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5704,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020201_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia II",
+      "name_ja": "魔匠のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5705,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020202_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia III",
+      "name_ja": "魔匠のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5706,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020203_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia IV",
+      "name_ja": "魔匠のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5707,
+      "item_ilvl": 55,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020204_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia V",
+      "name_ja": "魔匠のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5708,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020253_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia VI",
+      "name_ja": "魔匠のハイマテリジャ",
+      "grade": 6,
+      "value": 8,
+      "item_id": 18026,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020270_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia VII",
+      "name_ja": "魔匠のメガマテリジャ",
+      "grade": 7,
+      "value": 7,
+      "item_id": 25195,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020271_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia VIII",
+      "name_ja": "魔匠のエクスマテリジャ",
+      "grade": 8,
+      "value": 9,
+      "item_id": 26736,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020276_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia IX",
+      "name_ja": "魔匠のオメガマテリジャ",
+      "grade": 9,
+      "value": 8,
+      "item_id": 33926,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020285_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia X",
+      "name_ja": "魔匠のアルテマテリジャ",
+      "grade": 10,
+      "value": 10,
+      "item_id": 33939,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020290_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia XI",
+      "name_ja": "魔匠のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 9,
+      "item_id": 41766,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020299_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Cunning Materia XII",
+      "name_ja": "魔匠のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 11,
+      "item_id": 41779,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020300_hr1.tex&format=webp"
+    }
+  ],
+  "71": [
+    {
+      "name": "Craftsman's Command Materia I",
+      "name_ja": "巨匠のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5709,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020201_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia II",
+      "name_ja": "巨匠のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5710,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020202_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia III",
+      "name_ja": "巨匠のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5711,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020203_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia IV",
+      "name_ja": "巨匠のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5712,
+      "item_ilvl": 55,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020204_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia V",
+      "name_ja": "巨匠のマテリジャ",
+      "grade": 5,
+      "value": 7,
+      "item_id": 5713,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020253_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia VI",
+      "name_ja": "巨匠のハイマテリジャ",
+      "grade": 6,
+      "value": 10,
+      "item_id": 18027,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020270_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia VII",
+      "name_ja": "巨匠のメガマテリジャ",
+      "grade": 7,
+      "value": 9,
+      "item_id": 25196,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020271_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia VIII",
+      "name_ja": "巨匠のエクスマテリジャ",
+      "grade": 8,
+      "value": 13,
+      "item_id": 26737,
+      "item_ilvl": 430,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020276_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia IX",
+      "name_ja": "巨匠のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33927,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020285_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia X",
+      "name_ja": "巨匠のアルテマテリジャ",
+      "grade": 10,
+      "value": 18,
+      "item_id": 33940,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020290_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia XI",
+      "name_ja": "巨匠のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 15,
+      "item_id": 41767,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020299_hr1.tex&format=webp"
+    },
+    {
+      "name": "Craftsman's Command Materia XII",
+      "name_ja": "巨匠のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 23,
+      "item_id": 41780,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020300_hr1.tex&format=webp"
+    }
+  ],
+  "45": [
+    {
+      "name": "Quickarm Materia I",
+      "name_ja": "戦技のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5714,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020225_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia II",
+      "name_ja": "戦技のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5715,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020226_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia III",
+      "name_ja": "戦技のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5716,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020227_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia IV",
+      "name_ja": "戦技のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5717,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020228_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia V",
+      "name_ja": "戦技のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5718,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020259_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia VI",
+      "name_ja": "戦技のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18028,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020265_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia VII",
+      "name_ja": "戦技のメガマテリジャ",
+      "grade": 7,
+      "value": 8,
+      "item_id": 25197,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020275_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia VIII",
+      "name_ja": "戦技のエクスマテリジャ",
+      "grade": 8,
+      "value": 24,
+      "item_id": 26738,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020280_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia IX",
+      "name_ja": "戦技のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33928,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020282_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia X",
+      "name_ja": "戦技のアルテマテリジャ",
+      "grade": 10,
+      "value": 36,
+      "item_id": 33941,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020287_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia XI",
+      "name_ja": "戦技のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 18,
+      "item_id": 41768,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020293_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quickarm Materia XII",
+      "name_ja": "戦技のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 54,
+      "item_id": 41781,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020294_hr1.tex&format=webp"
+    }
+  ],
+  "46": [
+    {
+      "name": "Quicktongue Materia I",
+      "name_ja": "詠唱のマテリア",
+      "grade": 1,
+      "value": 1,
+      "item_id": 5719,
+      "item_ilvl": 15,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020225_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia II",
+      "name_ja": "詠唱のマテリラ",
+      "grade": 2,
+      "value": 2,
+      "item_id": 5720,
+      "item_ilvl": 30,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020226_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia III",
+      "name_ja": "詠唱のマテリダ",
+      "grade": 3,
+      "value": 3,
+      "item_id": 5721,
+      "item_ilvl": 45,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020227_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia IV",
+      "name_ja": "詠唱のマテリガ",
+      "grade": 4,
+      "value": 4,
+      "item_id": 5722,
+      "item_ilvl": 70,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020228_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia V",
+      "name_ja": "詠唱のマテリジャ",
+      "grade": 5,
+      "value": 6,
+      "item_id": 5723,
+      "item_ilvl": 160,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020259_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia VI",
+      "name_ja": "詠唱のハイマテリジャ",
+      "grade": 6,
+      "value": 16,
+      "item_id": 18029,
+      "item_ilvl": 290,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020265_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia VII",
+      "name_ja": "詠唱のメガマテリジャ",
+      "grade": 7,
+      "value": 8,
+      "item_id": 25198,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020275_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia VIII",
+      "name_ja": "詠唱のエクスマテリジャ",
+      "grade": 8,
+      "value": 24,
+      "item_id": 26739,
+      "item_ilvl": 420,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020280_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia IX",
+      "name_ja": "詠唱のオメガマテリジャ",
+      "grade": 9,
+      "value": 12,
+      "item_id": 33929,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020282_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia X",
+      "name_ja": "詠唱のアルテマテリジャ",
+      "grade": 10,
+      "value": 36,
+      "item_id": 33942,
+      "item_ilvl": 560,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020287_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia XI",
+      "name_ja": "詠唱のハイオメガマテリジャ",
+      "grade": 11,
+      "value": 18,
+      "item_id": 41769,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020293_hr1.tex&format=webp"
+    },
+    {
+      "name": "Quicktongue Materia XII",
+      "name_ja": "詠唱のハイアルテマテリジャ",
+      "grade": 12,
+      "value": 54,
+      "item_id": 41782,
+      "item_ilvl": 690,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020294_hr1.tex&format=webp"
+    }
+  ],
+  "57": [
+    {
+      "name": "Cactuar Foot Materia I",
+      "name_ja": "奮起のマテリア",
+      "grade": 3,
+      "value": 0,
+      "item_id": 6937,
+      "item_ilvl": 1,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020219_hr1.tex&format=webp"
+    }
+  ],
+  "61": [
+    {
+      "name": "Coeurl Eye Materia I",
+      "name_ja": "猫目のマテリア",
+      "grade": 3,
+      "value": 0,
+      "item_id": 6939,
+      "item_ilvl": 1,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020219_hr1.tex&format=webp"
+    }
+  ],
+  "62": [
+    {
+      "name": "Aurelia Kiss Materia I",
+      "name_ja": "抗体のマテリア",
+      "grade": 3,
+      "value": 0,
+      "item_id": 6940,
+      "item_ilvl": 1,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020219_hr1.tex&format=webp"
+    }
+  ],
+  "63": [
+    {
+      "name": "Bison Hoof Materia I",
+      "name_ja": "強心のマテリア",
+      "grade": 3,
+      "value": 0,
+      "item_id": 6941,
+      "item_ilvl": 1,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020219_hr1.tex&format=webp"
+    }
+  ],
+  "64": [
+    {
+      "name": "Funguar Shriek Materia I",
+      "name_ja": "興奮のマテリア",
+      "grade": 3,
+      "value": 0,
+      "item_id": 6942,
+      "item_ilvl": 1,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020219_hr1.tex&format=webp"
+    }
+  ],
+  "65": [
+    {
+      "name": "Treant Root Materia I",
+      "name_ja": "不屈のマテリア",
+      "grade": 3,
+      "value": 0,
+      "item_id": 6943,
+      "item_ilvl": 1,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020219_hr1.tex&format=webp"
+    }
+  ],
+  "66": [
+    {
+      "name": "Chocobo Down Materia I",
+      "name_ja": "昂揚のマテリア",
+      "grade": 3,
+      "value": 0,
+      "item_id": 6944,
+      "item_ilvl": 1,
+      "icon_url": "https://v2.xivapi.com/api/asset?path=ui%2Ficon%2F020000%2F020219_hr1.tex&format=webp"
+    }
+  ]
+}

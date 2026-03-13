@@ -1,0 +1,2431 @@
+{
+  "3": {
+    "name": "Sprint",
+    "name_ja": "スプリント",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "System"
+  },
+  "1302": {
+    "name": "Regeneration",
+    "name_ja": "リジェネレーション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "7559": {
+    "name": "Surecast",
+    "name_ja": "堅実魔",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7560": {
+    "name": "Addle",
+    "name_ja": "アドル",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7561": {
+    "name": "Swiftcast",
+    "name_ja": "迅速魔",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7562": {
+    "name": "Lucid Dreaming",
+    "name_ja": "ルーシッドドリーム",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34650": {
+    "name": "Fire in Red",
+    "name_ja": "レッドファイア",
+    "potency": 440,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34651": {
+    "name": "Aero in Green",
+    "name_ja": "グリーンエアロ",
+    "potency": 480,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34652": {
+    "name": "Water in Blue",
+    "name_ja": "ブルーウォータ",
+    "potency": 520,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34653": {
+    "name": "Blizzard in Cyan",
+    "name_ja": "シアンブリザド",
+    "potency": 800,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34654": {
+    "name": "Stone in Yellow",
+    "name_ja": "イエローストーン",
+    "potency": 840,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34655": {
+    "name": "Thunder in Magenta",
+    "name_ja": "マゼンタサンダー",
+    "potency": 880,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34662": {
+    "name": "Holy in White",
+    "name_ja": "ホワイトホーリー",
+    "potency": 520,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34663": {
+    "name": "Comet in Black",
+    "name_ja": "ブラックコメット",
+    "potency": 880,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34664": {
+    "name": "Pom Motif",
+    "name_ja": "ピクトポンポン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34665": {
+    "name": "Wing Motif",
+    "name_ja": "ピクトウィング",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34666": {
+    "name": "Claw Motif",
+    "name_ja": "ピクトクロー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34667": {
+    "name": "Maw Motif",
+    "name_ja": "ピクトファング",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34668": {
+    "name": "Hammer Motif",
+    "name_ja": "ピクトハンマー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34669": {
+    "name": "Starry Sky Motif",
+    "name_ja": "ピクトスカイ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34670": {
+    "name": "Pom Muse",
+    "name_ja": "イマジンポンポン",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34671": {
+    "name": "Winged Muse",
+    "name_ja": "イマジンウィング",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34672": {
+    "name": "Clawed Muse",
+    "name_ja": "イマジンクロー",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34673": {
+    "name": "Fanged Muse",
+    "name_ja": "イマジンファング",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34674": {
+    "name": "Striking Muse",
+    "name_ja": "イマジンハンマー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34675": {
+    "name": "Starry Muse",
+    "name_ja": "イマジンスカイ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34676": {
+    "name": "Mog of the Ages",
+    "name_ja": "モーグリストリーム",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34677": {
+    "name": "Retribution of the Madeen",
+    "name_ja": "マディーンレトリビューション",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34678": {
+    "name": "Hammer Stamp",
+    "name_ja": "ハンマースタンプ",
+    "potency": 560,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34679": {
+    "name": "Hammer Brush",
+    "name_ja": "ハンマーブラッシュ",
+    "potency": 620,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34680": {
+    "name": "Polishing Hammer",
+    "name_ja": "ハンマーポリッシュ",
+    "potency": 680,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34681": {
+    "name": "Star Prism",
+    "name_ja": "スタープリズム",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34682": {
+    "name": "Star Prism",
+    "name_ja": "スタープリズム",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34683": {
+    "name": "Subtractive Palette",
+    "name_ja": "サブトラクティブパレット",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34684": {
+    "name": "Smudge",
+    "name_ja": "スマッジ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34685": {
+    "name": "Tempera Coat",
+    "name_ja": "テンペラコート",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34686": {
+    "name": "Tempera Grassa",
+    "name_ja": "テンペラグラッサ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "34688": {
+    "name": "Rainbow Drip",
+    "name_ja": "レインボードリップ",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "34658": {
+    "name": "Water II in Blue",
+    "name_ja": "ブルーウォタラ",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "7": {
+    "name": "attack",
+    "name_ja": "攻撃",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Auto-attack"
+  },
+  "9": {
+    "name": "Fast Blade",
+    "name_ja": "ファストブレード",
+    "potency": 220,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "15": {
+    "name": "Riot Blade",
+    "name_ja": "ライオットソード",
+    "potency": 170,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "17": {
+    "name": "Sentinel",
+    "name_ja": "センチネル",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "20": {
+    "name": "Fight or Flight",
+    "name_ja": "ファイト・オア・フライト",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "22": {
+    "name": "Bulwark",
+    "name_ja": "ブルワーク",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "23": {
+    "name": "Circle of Scorn",
+    "name_ja": "サークル・オブ・ドゥーム",
+    "potency": 140,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "28": {
+    "name": "Iron Will",
+    "name_ja": "アイアンウィル",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "29": {
+    "name": "Spirits Within",
+    "name_ja": "スピリッツウィズイン",
+    "potency": 270,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "30": {
+    "name": "Hallowed Ground",
+    "name_ja": "インビンシブル",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3538": {
+    "name": "Goring Blade",
+    "name_ja": "ゴアブレード",
+    "potency": 700,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3539": {
+    "name": "Royal Authority",
+    "name_ja": "ロイヤルアソリティ",
+    "potency": 200,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3540": {
+    "name": "Divine Veil",
+    "name_ja": "ディヴァインヴェール",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3541": {
+    "name": "Clemency",
+    "name_ja": "クレメンシー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "3542": {
+    "name": "Sheltron",
+    "name_ja": "シェルトロン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7382": {
+    "name": "Intervention",
+    "name_ja": "インターベンション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7383": {
+    "name": "Requiescat",
+    "name_ja": "レクイエスカット",
+    "potency": 320,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7384": {
+    "name": "Holy Spirit",
+    "name_ja": "ホーリースピリット",
+    "potency": 400,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "7385": {
+    "name": "Passage of Arms",
+    "name_ja": "パッセージ・オブ・アームズ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7531": {
+    "name": "Rampart",
+    "name_ja": "ランパート",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7533": {
+    "name": "Provoke",
+    "name_ja": "挑発",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7535": {
+    "name": "Reprisal",
+    "name_ja": "リプライザル",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7537": {
+    "name": "Shirk",
+    "name_ja": "シャーク",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7548": {
+    "name": "Arm's Length",
+    "name_ja": "アームズレングス",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16458": {
+    "name": "Holy Circle",
+    "name_ja": "ホーリーサークル",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16459": {
+    "name": "Confiteor",
+    "name_ja": "コンフィテオル",
+    "potency": 500,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16460": {
+    "name": "Atonement",
+    "name_ja": "ロイエ",
+    "potency": 460,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "16461": {
+    "name": "Intervene",
+    "name_ja": "インターヴィーン",
+    "potency": 150,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "32065": {
+    "name": "Release Iron Will",
+    "name_ja": "アイアンウィル解除",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36918": {
+    "name": "Supplication",
+    "name_ja": "ゲベート",
+    "potency": 500,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36919": {
+    "name": "Sepulchre",
+    "name_ja": "グラブカッマー",
+    "potency": 540,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25746": {
+    "name": "Holy Sheltron",
+    "name_ja": "ホーリーシェルトロン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25747": {
+    "name": "Expiacion",
+    "name_ja": "エクスピアシオン",
+    "potency": 450,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25748": {
+    "name": "Blade of Faith",
+    "name_ja": "ブレード・オブ・フェイス",
+    "potency": 260,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25749": {
+    "name": "Blade of Truth",
+    "name_ja": "ブレード・オブ・トゥルース",
+    "potency": 380,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25750": {
+    "name": "Blade of Valor",
+    "name_ja": "ブレード・オブ・ヴァラー",
+    "potency": 500,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "36920": {
+    "name": "Guardian",
+    "name_ja": "エクストリームガード",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36921": {
+    "name": "Imperator",
+    "name_ja": "インペラトル",
+    "potency": 580,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36922": {
+    "name": "Blade of Honor",
+    "name_ja": "ブレード・オブ・オナー",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3603": {
+    "name": "Ascend",
+    "name_ja": "アセンド",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "3606": {
+    "name": "Lightspeed",
+    "name_ja": "ライトスピード",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3610": {
+    "name": "Benefic II",
+    "name_ja": "ベネフィラ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "3612": {
+    "name": "Synastry",
+    "name_ja": "シナストリー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3613": {
+    "name": "Collective Unconscious",
+    "name_ja": "運命の輪",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3614": {
+    "name": "Essential Dignity",
+    "name_ja": "ディグニティ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7439": {
+    "name": "Earthly Star",
+    "name_ja": "アーサリースター",
+    "potency": 205,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7444": {
+    "name": "Lord of Crowns",
+    "name_ja": "クラウンロード",
+    "potency": 400,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7445": {
+    "name": "Lady of Crowns",
+    "name_ja": "クラウンレディ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "8324": {
+    "name": "Stellar Detonation",
+    "name_ja": "ステラデトネーション",
+    "potency": 205,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16552": {
+    "name": "Divination",
+    "name_ja": "ディヴィネーション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16553": {
+    "name": "Celestial Opposition",
+    "name_ja": "星天対抗",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16554": {
+    "name": "Combust III",
+    "name_ja": "コンバガ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16556": {
+    "name": "Celestial Intersection",
+    "name_ja": "星天交差",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16557": {
+    "name": "Horoscope",
+    "name_ja": "ホロスコープ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16558": {
+    "name": "Horoscope",
+    "name_ja": "ホロスコープ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16559": {
+    "name": "Neutral Sect",
+    "name_ja": "ニュートラルセクト",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25871": {
+    "name": "Fall Malefic",
+    "name_ja": "フォールマレフィク",
+    "potency": 270,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25872": {
+    "name": "Gravity II",
+    "name_ja": "グラビラ",
+    "potency": 130,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25873": {
+    "name": "Exaltation",
+    "name_ja": "エクザルテーション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25874": {
+    "name": "Macrocosmos",
+    "name_ja": "マクロコスモス",
+    "potency": 270,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25875": {
+    "name": "Microcosmos",
+    "name_ja": "ミクロコスモス",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37017": {
+    "name": "Astral Draw",
+    "name_ja": "アストラルドロー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37018": {
+    "name": "Umbral Draw",
+    "name_ja": "アンブラルドロー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37023": {
+    "name": "the Balance",
+    "name_ja": "アーゼマの均衡",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37024": {
+    "name": "the Arrow",
+    "name_ja": "オシュオンの矢",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37025": {
+    "name": "the Spire",
+    "name_ja": "ビエルゴの塔",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37026": {
+    "name": "the Spear",
+    "name_ja": "ハルオーネの槍",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37027": {
+    "name": "the Bole",
+    "name_ja": "世界樹の幹",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37028": {
+    "name": "the Ewer",
+    "name_ja": "サリャクの水瓶",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37029": {
+    "name": "Oracle",
+    "name_ja": "オラクル",
+    "potency": 860,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37030": {
+    "name": "Helios Conjunction",
+    "name_ja": "コンジャンクション・ヘリオス",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "37031": {
+    "name": "Sun Sign",
+    "name_ja": "サンサイン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "166": {
+    "name": "Aetherflow",
+    "name_ja": "エーテルフロー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "167": {
+    "name": "Energy Drain",
+    "name_ja": "エナジードレイン",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "185": {
+    "name": "Adloquium",
+    "name_ja": "鼓舞激励の策",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "188": {
+    "name": "Sacred Soil",
+    "name_ja": "野戦治療の陣",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "189": {
+    "name": "Lustrate",
+    "name_ja": "生命活性法",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3583": {
+    "name": "Indomitability",
+    "name_ja": "不撓不屈の策",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3585": {
+    "name": "Deployment Tactics",
+    "name_ja": "展開戦術",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3587": {
+    "name": "Dissipation",
+    "name_ja": "転化",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7434": {
+    "name": "Excogitation",
+    "name_ja": "深謀遠慮の策",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7436": {
+    "name": "Chain Stratagem",
+    "name_ja": "連環計",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7437": {
+    "name": "Aetherpact",
+    "name_ja": "エーテルパクト",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16537": {
+    "name": "Whispering Dawn",
+    "name_ja": "光の囁き",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16538": {
+    "name": "Fey Illumination",
+    "name_ja": "フェイイルミネーション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16540": {
+    "name": "Biolysis",
+    "name_ja": "蠱毒法",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16542": {
+    "name": "Recitation",
+    "name_ja": "秘策",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16543": {
+    "name": "Fey Blessing",
+    "name_ja": "フェイブレッシング",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16545": {
+    "name": "Summon Seraph",
+    "name_ja": "サモン・セラフィム",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16546": {
+    "name": "Consolation",
+    "name_ja": "コンソレイション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "17870": {
+    "name": "Ruin II",
+    "name_ja": "ルインラ",
+    "potency": 220,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25865": {
+    "name": "Broil IV",
+    "name_ja": "極炎法",
+    "potency": 310,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25866": {
+    "name": "Art of War II",
+    "name_ja": "裂陣法",
+    "potency": 180,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25867": {
+    "name": "Protraction",
+    "name_ja": "生命回生法",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25868": {
+    "name": "Expedient",
+    "name_ja": "疾風怒濤の計",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37012": {
+    "name": "Baneful Impaction",
+    "name_ja": "埋伏の毒",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37013": {
+    "name": "Concitation",
+    "name_ja": "意気軒昂の策",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "37014": {
+    "name": "Seraphism",
+    "name_ja": "セラフィズム",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "152": {
+    "name": "Fire III",
+    "name_ja": "ファイガ",
+    "potency": 280,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "153": {
+    "name": "Thunder III",
+    "name_ja": "サンダガ",
+    "potency": 120,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "154": {
+    "name": "Blizzard III",
+    "name_ja": "ブリザガ",
+    "potency": 280,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "158": {
+    "name": "Manafont",
+    "name_ja": "マナフォント",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3573": {
+    "name": "Ley Lines",
+    "name_ja": "黒魔紋",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3577": {
+    "name": "Fire IV",
+    "name_ja": "ファイジャ",
+    "potency": 320,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "7420": {
+    "name": "Thunder IV",
+    "name_ja": "サンダジャ",
+    "potency": 80,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16505": {
+    "name": "Despair",
+    "name_ja": "デスペア",
+    "potency": 350,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "8": {
+    "name": "Shot",
+    "name_ja": "ショット",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Auto-attack"
+  },
+  "101": {
+    "name": "Raging Strikes",
+    "name_ja": "猛者の撃",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "107": {
+    "name": "Barrage",
+    "name_ja": "乱れ撃ち",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "114": {
+    "name": "Mage's Ballad",
+    "name_ja": "賢人のバラード",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "116": {
+    "name": "Army's Paeon",
+    "name_ja": "軍神のパイオン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "117": {
+    "name": "Rain of Death",
+    "name_ja": "レイン・オブ・デス",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "118": {
+    "name": "Battle Voice",
+    "name_ja": "バトルボイス",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3558": {
+    "name": "Empyreal Arrow",
+    "name_ja": "エンピリアルアロー",
+    "potency": 260,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3559": {
+    "name": "the Wanderer's Minuet",
+    "name_ja": "旅神のメヌエット",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3560": {
+    "name": "Iron Jaws",
+    "name_ja": "アイアンジョー",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3562": {
+    "name": "Sidewinder",
+    "name_ja": "サイドワインダー",
+    "potency": 400,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "4244": {
+    "name": "Sagittarius Arrow",
+    "name_ja": "サジタリウスアロー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Limit Break"
+  },
+  "7404": {
+    "name": "Pitch Perfect",
+    "name_ja": "ピッチパーフェクト",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7405": {
+    "name": "Troubadour",
+    "name_ja": "トルバドゥール",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7406": {
+    "name": "Caustic Bite",
+    "name_ja": "コースティックバイト",
+    "potency": 150,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7407": {
+    "name": "Stormbite",
+    "name_ja": "ストームバイト",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7408": {
+    "name": "Nature's Minne",
+    "name_ja": "地神のミンネ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7409": {
+    "name": "Refulgent Arrow",
+    "name_ja": "リフルジェントアロー",
+    "potency": 280,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7541": {
+    "name": "Second Wind",
+    "name_ja": "内丹",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7551": {
+    "name": "Head Graze",
+    "name_ja": "ヘッドグレイズ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7553": {
+    "name": "Foot Graze",
+    "name_ja": "フットグレイズ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7554": {
+    "name": "Leg Graze",
+    "name_ja": "レッググレイズ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16494": {
+    "name": "Shadowbite",
+    "name_ja": "シャドウバイト",
+    "potency": 170,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "16495": {
+    "name": "Burst Shot",
+    "name_ja": "バーストショット",
+    "potency": 220,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "16496": {
+    "name": "Apex Arrow",
+    "name_ja": "エイペックスアロー",
+    "potency": 120,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25783": {
+    "name": "Ladonsbite",
+    "name_ja": "ラドンバイト",
+    "potency": 130,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25784": {
+    "name": "Blast Arrow",
+    "name_ja": "ブラストアロー",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25785": {
+    "name": "Radiant Finale",
+    "name_ja": "光神のフィナーレ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36975": {
+    "name": "Heartbreak Shot",
+    "name_ja": "ハートブレイクショット",
+    "potency": 180,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36976": {
+    "name": "Resonant Arrow",
+    "name_ja": "レゾナンスアロー",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36977": {
+    "name": "Radiant Encore",
+    "name_ja": "光神のアンコール",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3617": {
+    "name": "Hard Slash",
+    "name_ja": "ハードスラッシュ",
+    "potency": 300,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3623": {
+    "name": "Syphon Strike",
+    "name_ja": "サイフォンストライク",
+    "potency": 240,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3624": {
+    "name": "Unmend",
+    "name_ja": "アンメンド",
+    "potency": 150,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "3632": {
+    "name": "Souleater",
+    "name_ja": "ソウルイーター",
+    "potency": 260,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3634": {
+    "name": "Dark Mind",
+    "name_ja": "ダークマインド",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3638": {
+    "name": "Living Dead",
+    "name_ja": "リビングデッド",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3639": {
+    "name": "Salted Earth",
+    "name_ja": "ソルトアース",
+    "potency": 50,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3643": {
+    "name": "Carve and Spit",
+    "name_ja": "カーヴ・アンド・スピット",
+    "potency": 540,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7390": {
+    "name": "Delirium",
+    "name_ja": "ブラッドデリリアム",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7392": {
+    "name": "Bloodspiller",
+    "name_ja": "ブラッドスピラー",
+    "potency": 580,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7393": {
+    "name": "The Blackest Night",
+    "name_ja": "ブラックナイト",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7538": {
+    "name": "Interject",
+    "name_ja": "インタージェクト",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7540": {
+    "name": "Low Blow",
+    "name_ja": "ロウブロウ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16470": {
+    "name": "Edge of Shadow",
+    "name_ja": "漆黒の剣",
+    "potency": 460,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16471": {
+    "name": "Dark Missionary",
+    "name_ja": "ダークミッショナリー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16472": {
+    "name": "Living Shadow",
+    "name_ja": "影身具現",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25754": {
+    "name": "Oblation",
+    "name_ja": "オブレーション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25755": {
+    "name": "Salt and Darkness",
+    "name_ja": "ソルト・アンド・ダーク",
+    "potency": 500,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25756": {
+    "name": "Salt and Darkness",
+    "name_ja": "ソルト・アンド・ダーク",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25757": {
+    "name": "Shadowbringer",
+    "name_ja": "シャドウブリンガー",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36926": {
+    "name": "Shadowstride",
+    "name_ja": "シャドウストライド",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36927": {
+    "name": "Shadowed Vigil",
+    "name_ja": "シャドウヴィジル",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36928": {
+    "name": "Scarlet Delirium",
+    "name_ja": "レッドデリリアム",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36929": {
+    "name": "Comeuppance",
+    "name_ja": "カマパンス",
+    "potency": 700,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36930": {
+    "name": "Torcleaver",
+    "name_ja": "トアクリーバー",
+    "potency": 800,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36932": {
+    "name": "Disesteem",
+    "name_ja": "ディセスティーム",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "2876": {
+    "name": "Reassemble",
+    "name_ja": "整備",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "2878": {
+    "name": "Wildfire",
+    "name_ja": "ワイルドファイア",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "2887": {
+    "name": "Dismantle",
+    "name_ja": "ウェポンブレイク",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7411": {
+    "name": "Heated Split Shot",
+    "name_ja": "ヒートスプリットショット",
+    "potency": 220,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7412": {
+    "name": "Heated Slug Shot",
+    "name_ja": "ヒートスラッグショット",
+    "potency": 140,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7413": {
+    "name": "Heated Clean Shot",
+    "name_ja": "ヒートクリーンショット",
+    "potency": 140,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7414": {
+    "name": "Barrel Stabilizer",
+    "name_ja": "バレルヒーター",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16498": {
+    "name": "Drill",
+    "name_ja": "ドリル",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "16500": {
+    "name": "Air Anchor",
+    "name_ja": "エアアンカー",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "16501": {
+    "name": "Automaton Queen",
+    "name_ja": "オートマトン・クイーン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16889": {
+    "name": "Tactician",
+    "name_ja": "タクティシャン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "17209": {
+    "name": "Hypercharge",
+    "name_ja": "ハイパーチャージ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25788": {
+    "name": "Chain Saw",
+    "name_ja": "回転のこぎり",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36978": {
+    "name": "Blazing Shot",
+    "name_ja": "ブレイズショット",
+    "potency": 220,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36979": {
+    "name": "Double Check",
+    "name_ja": "ダブルチェック",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36980": {
+    "name": "Checkmate",
+    "name_ja": "チェックメイト",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36981": {
+    "name": "Excavator",
+    "name_ja": "エクスカベーター",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36982": {
+    "name": "Full Metal Field",
+    "name_ja": "フルメタルバースト",
+    "potency": 900,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "61": {
+    "name": "Twin Snakes",
+    "name_ja": "双掌打",
+    "potency": 420,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "65": {
+    "name": "Mantra",
+    "name_ja": "マントラ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "66": {
+    "name": "Demolish",
+    "name_ja": "破砕拳",
+    "potency": 360,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "69": {
+    "name": "Perfect Balance",
+    "name_ja": "踏鳴",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "74": {
+    "name": "Dragon Kick",
+    "name_ja": "双竜脚",
+    "potency": 320,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3547": {
+    "name": "the Forbidden Chakra",
+    "name_ja": "陰陽闘気斬",
+    "potency": 400,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "4262": {
+    "name": "Form Shift",
+    "name_ja": "演武",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7394": {
+    "name": "Riddle of Earth",
+    "name_ja": "金剛の極意",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7395": {
+    "name": "Riddle of Fire",
+    "name_ja": "紅蓮の極意",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7396": {
+    "name": "Brotherhood",
+    "name_ja": "桃園結義",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7546": {
+    "name": "True North",
+    "name_ja": "トゥルーノース",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7549": {
+    "name": "Feint",
+    "name_ja": "牽制",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16476": {
+    "name": "Six-sided Star",
+    "name_ja": "六合星導脚",
+    "potency": 780,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25762": {
+    "name": "Thunderclap",
+    "name_ja": "抜重歩法",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25766": {
+    "name": "Riddle of Wind",
+    "name_ja": "疾風の極意",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25768": {
+    "name": "Rising Phoenix",
+    "name_ja": "鳳凰の舞",
+    "potency": 900,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25769": {
+    "name": "Phantom Rush",
+    "name_ja": "夢幻闘舞",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36942": {
+    "name": "Forbidden Meditation",
+    "name_ja": "陰陽闘気",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36944": {
+    "name": "Earth's Reply",
+    "name_ja": "金剛周天",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36945": {
+    "name": "Leaping Opo",
+    "name_ja": "猿舞連撃",
+    "potency": 260,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36946": {
+    "name": "Rising Raptor",
+    "name_ja": "竜頷正拳撃",
+    "potency": 340,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36947": {
+    "name": "Pouncing Coeurl",
+    "name_ja": "虎襲崩拳",
+    "potency": 310,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36948": {
+    "name": "Elixir Burst",
+    "name_ja": "真空波",
+    "potency": 900,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36949": {
+    "name": "Wind's Reply",
+    "name_ja": "絶空拳",
+    "potency": 900,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36950": {
+    "name": "Fire's Reply",
+    "name_ja": "乾坤闘気弾",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "2240": {
+    "name": "Spinning Edge",
+    "name_ja": "双刃旋",
+    "potency": 300,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "2241": {
+    "name": "Shade Shift",
+    "name_ja": "残影",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "2242": {
+    "name": "Gust Slash",
+    "name_ja": "風断ち",
+    "potency": 240,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "2247": {
+    "name": "Throwing Dagger",
+    "name_ja": "投刃",
+    "potency": 120,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "2255": {
+    "name": "Aeolian Edge",
+    "name_ja": "旋風刃",
+    "potency": 200,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "2259": {
+    "name": "Ten",
+    "name_ja": "天の印",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "2262": {
+    "name": "Shukuchi",
+    "name_ja": "縮地",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "2264": {
+    "name": "Kassatsu",
+    "name_ja": "活殺自在",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "2267": {
+    "name": "Raiton",
+    "name_ja": "雷遁の術",
+    "potency": 740,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "2271": {
+    "name": "Suiton",
+    "name_ja": "水遁の術",
+    "potency": 580,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3563": {
+    "name": "Armor Crush",
+    "name_ja": "強甲破点突",
+    "potency": 220,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3566": {
+    "name": "Dream Within a Dream",
+    "name_ja": "夢幻三段",
+    "potency": 150,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7401": {
+    "name": "Hellfrog Medium",
+    "name_ja": "口寄せの術・大蝦蟇",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7402": {
+    "name": "Bhavacakra",
+    "name_ja": "六道輪廻",
+    "potency": 380,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7403": {
+    "name": "Ten Chi Jin",
+    "name_ja": "天地人",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7863": {
+    "name": "Leg Sweep",
+    "name_ja": "レッグスウィープ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16489": {
+    "name": "Meisui",
+    "name_ja": "命水",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16491": {
+    "name": "Goka Mekkyaku",
+    "name_ja": "劫火滅却の術",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16492": {
+    "name": "Hyosho Ranryu",
+    "name_ja": "氷晶乱流の術",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16493": {
+    "name": "Bunshin",
+    "name_ja": "分身の術",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "18805": {
+    "name": "Ten",
+    "name_ja": "天の印",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "18806": {
+    "name": "Chi",
+    "name_ja": "地の印",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "18807": {
+    "name": "Jin",
+    "name_ja": "人の印",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "18873": {
+    "name": "Fuma Shuriken",
+    "name_ja": "風魔手裏剣",
+    "potency": 500,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "18877": {
+    "name": "Raiton",
+    "name_ja": "雷遁の術",
+    "potency": 740,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "18881": {
+    "name": "Suiton",
+    "name_ja": "水遁の術",
+    "potency": 580,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25774": {
+    "name": "Phantom Kamaitachi",
+    "name_ja": "残影鎌鼬",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25777": {
+    "name": "Forked Raiju",
+    "name_ja": "月影雷獣爪",
+    "potency": 700,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25778": {
+    "name": "Fleeting Raiju",
+    "name_ja": "月影雷獣牙",
+    "potency": 700,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36957": {
+    "name": "Dokumori",
+    "name_ja": "毒盛の術",
+    "potency": 300,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36958": {
+    "name": "Kunai's Bane",
+    "name_ja": "百雷銃",
+    "potency": 600,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36959": {
+    "name": "Deathfrog Medium",
+    "name_ja": "口寄せの術・蝦蟇仙",
+    "potency": 300,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36960": {
+    "name": "Zesho Meppo",
+    "name_ja": "是生滅法",
+    "potency": 700,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36961": {
+    "name": "Tenri Jindo",
+    "name_ja": "天理人道",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7478": {
+    "name": "Jinpu",
+    "name_ja": "陣風",
+    "potency": 140,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7479": {
+    "name": "Shifu",
+    "name_ja": "士風",
+    "potency": 140,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7480": {
+    "name": "Yukikaze",
+    "name_ja": "雪風",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7481": {
+    "name": "Gekko",
+    "name_ja": "月光",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7482": {
+    "name": "Kasha",
+    "name_ja": "花車",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7486": {
+    "name": "Enpi",
+    "name_ja": "燕飛",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7487": {
+    "name": "Midare Setsugekka",
+    "name_ja": "乱れ雪月花",
+    "potency": 640,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7489": {
+    "name": "Higanbana",
+    "name_ja": "彼岸花",
+    "potency": 200,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "7490": {
+    "name": "Hissatsu: Shinten",
+    "name_ja": "必殺剣・震天",
+    "potency": 250,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7492": {
+    "name": "Hissatsu: Gyoten",
+    "name_ja": "必殺剣・暁天",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7493": {
+    "name": "Hissatsu: Yaten",
+    "name_ja": "必殺剣・夜天",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7499": {
+    "name": "Meikyo Shisui",
+    "name_ja": "明鏡止水",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16481": {
+    "name": "Hissatsu: Senei",
+    "name_ja": "必殺剣・閃影",
+    "potency": 800,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16482": {
+    "name": "Ikishoten",
+    "name_ja": "意気衝天",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16486": {
+    "name": "Kaeshi: Setsugekka",
+    "name_ja": "返し雪月花",
+    "potency": 640,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "16487": {
+    "name": "Shoha",
+    "name_ja": "照破",
+    "potency": 640,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25781": {
+    "name": "Ogi Namikiri",
+    "name_ja": "奥義波切",
+    "potency": 900,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "25782": {
+    "name": "Kaeshi: Namikiri",
+    "name_ja": "返し波切",
+    "potency": 900,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36962": {
+    "name": "Tengentsu",
+    "name_ja": "天眼通",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36963": {
+    "name": "Gyofu",
+    "name_ja": "暁風",
+    "potency": 230,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36964": {
+    "name": "Zanshin",
+    "name_ja": "残心",
+    "potency": 820,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "36966": {
+    "name": "Tendo Setsugekka",
+    "name_ja": "天道雪月花",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "36968": {
+    "name": "Tendo Kaeshi Setsugekka",
+    "name_ja": "天道返し雪月花",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "24290": {
+    "name": "Eukrasia",
+    "name_ja": "エウクラシア",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "24297": {
+    "name": "Dyskrasia",
+    "name_ja": "ディスクラシア",
+    "potency": 160,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "24298": {
+    "name": "Kerachole",
+    "name_ja": "ケーラコレ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "24302": {
+    "name": "Physis II",
+    "name_ja": "ピュシスII",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "24304": {
+    "name": "Toxikon",
+    "name_ja": "トキシコン",
+    "potency": 300,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "24305": {
+    "name": "Haima",
+    "name_ja": "ハイマ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "24306": {
+    "name": "Dosis II",
+    "name_ja": "ドシスII",
+    "potency": 320,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "24307": {
+    "name": "Phlegma II",
+    "name_ja": "フレグマII",
+    "potency": 490,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "24308": {
+    "name": "Eukrasian Dosis II",
+    "name_ja": "エウクラシア・ドシスII",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "31": {
+    "name": "Heavy Swing",
+    "name_ja": "ヘヴィスウィング",
+    "potency": 220,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "37": {
+    "name": "Maim",
+    "name_ja": "メイム",
+    "potency": 190,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "42": {
+    "name": "Storm's Path",
+    "name_ja": "シュトルムヴィント",
+    "potency": 200,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "45": {
+    "name": "Storm's Eye",
+    "name_ja": "シュトルムブレハ",
+    "potency": 200,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "46": {
+    "name": "Tomahawk",
+    "name_ja": "トマホーク",
+    "potency": 150,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "52": {
+    "name": "Infuriate",
+    "name_ja": "ウォークライ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3549": {
+    "name": "Fell Cleave",
+    "name_ja": "フェルクリーヴ",
+    "potency": 580,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "3551": {
+    "name": "Raw Intuition",
+    "name_ja": "原初の直感",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7386": {
+    "name": "Onslaught",
+    "name_ja": "オンスロート",
+    "potency": 150,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7387": {
+    "name": "Upheaval",
+    "name_ja": "アップヒーバル",
+    "potency": 400,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7388": {
+    "name": "Shake It Off",
+    "name_ja": "シェイクオフ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7389": {
+    "name": "Inner Release",
+    "name_ja": "原初の解放",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16465": {
+    "name": "Inner Chaos",
+    "name_ja": "インナーカオス",
+    "potency": 660,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "136": {
+    "name": "Presence of Mind",
+    "name_ja": "神速魔",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3569": {
+    "name": "Asylum",
+    "name_ja": "アサイラム",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3570": {
+    "name": "Tetragrammaton",
+    "name_ja": "テトラグラマトン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "3571": {
+    "name": "Assize",
+    "name_ja": "アサイズ",
+    "potency": 400,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7432": {
+    "name": "Divine Benison",
+    "name_ja": "ディヴァインベニゾン",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7433": {
+    "name": "Plenary Indulgence",
+    "name_ja": "インドゥルゲンティア",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "16531": {
+    "name": "Afflatus Solace",
+    "name_ja": "ハート・オブ・ソラス",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16532": {
+    "name": "Dia",
+    "name_ja": "ディア",
+    "potency": 75,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16534": {
+    "name": "Afflatus Rapture",
+    "name_ja": "ハート・オブ・ラプチャー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16535": {
+    "name": "Afflatus Misery",
+    "name_ja": "ハート・オブ・ミゼリ",
+    "potency": 1,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "16536": {
+    "name": "Temperance",
+    "name_ja": "テンパランス",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25859": {
+    "name": "Glare III",
+    "name_ja": "グレアガ",
+    "potency": 330,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "25861": {
+    "name": "Aquaveil",
+    "name_ja": "アクアヴェール",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "25862": {
+    "name": "Liturgy of the Bell",
+    "name_ja": "リタージー・オブ・ベル",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37009": {
+    "name": "Glare IV",
+    "name_ja": "グレアジャ",
+    "potency": 640,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "37011": {
+    "name": "Divine Caress",
+    "name_ja": "ディヴァインカレス",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "140": {
+    "name": "Benediction",
+    "name_ja": "ベネディクション",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "7430": {
+    "name": "Thin Air",
+    "name_ja": "シンエアー",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37008": {
+    "name": "Aetherial Shift",
+    "name_ja": "エーテリアルシフト",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Ability"
+  },
+  "37010": {
+    "name": "Medica III",
+    "name_ja": "メディガ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "137": {
+    "name": "Regen",
+    "name_ja": "リジェネ",
+    "potency": null,
+    "dot_potency": null,
+    "attack_type": "Spell"
+  },
+  "24": {
+    "name": "Shield Lob",
+    "name_ja": "シールドロブ",
+    "potency": 100,
+    "dot_potency": null,
+    "attack_type": "Weaponskill"
+  },
+  "204": {
+    "name": "Starstorm",
+    "name_ja": "プチメテオ",
+    "potency": 3,
+    "dot_potency": null,
+    "attack_type": "Limit Break"
+  }
+}

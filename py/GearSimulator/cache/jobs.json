@@ -1,0 +1,250 @@
+{
+  "GLA": {
+    "modifier_strength": 95,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 50,
+    "modifier_mind": 95,
+    "modifier_vitality": 100,
+    "modifier_hp": 130
+  },
+  "PGL": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 45,
+    "modifier_mind": 85,
+    "modifier_vitality": 95,
+    "modifier_hp": 105
+  },
+  "MRD": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 30,
+    "modifier_mind": 50,
+    "modifier_vitality": 100,
+    "modifier_hp": 135
+  },
+  "LNC": {
+    "modifier_strength": 105,
+    "modifier_dexterity": 95,
+    "modifier_intelligence": 40,
+    "modifier_mind": 60,
+    "modifier_vitality": 100,
+    "modifier_hp": 110
+  },
+  "ARC": {
+    "modifier_strength": 85,
+    "modifier_dexterity": 105,
+    "modifier_intelligence": 80,
+    "modifier_mind": 75,
+    "modifier_vitality": 95,
+    "modifier_hp": 100
+  },
+  "CNJ": {
+    "modifier_strength": 50,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 100,
+    "modifier_mind": 105,
+    "modifier_vitality": 95,
+    "modifier_hp": 100
+  },
+  "THM": {
+    "modifier_strength": 40,
+    "modifier_dexterity": 95,
+    "modifier_intelligence": 105,
+    "modifier_mind": 70,
+    "modifier_vitality": 95,
+    "modifier_hp": 100
+  },
+  "PLD": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 95,
+    "modifier_intelligence": 60,
+    "modifier_mind": 100,
+    "modifier_vitality": 110,
+    "modifier_hp": 140
+  },
+  "MNK": {
+    "modifier_strength": 110,
+    "modifier_dexterity": 105,
+    "modifier_intelligence": 50,
+    "modifier_mind": 90,
+    "modifier_vitality": 100,
+    "modifier_hp": 110
+  },
+  "WAR": {
+    "modifier_strength": 105,
+    "modifier_dexterity": 95,
+    "modifier_intelligence": 40,
+    "modifier_mind": 55,
+    "modifier_vitality": 110,
+    "modifier_hp": 145
+  },
+  "DRG": {
+    "modifier_strength": 115,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 45,
+    "modifier_mind": 65,
+    "modifier_vitality": 105,
+    "modifier_hp": 115
+  },
+  "BRD": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 115,
+    "modifier_intelligence": 85,
+    "modifier_mind": 80,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "WHM": {
+    "modifier_strength": 55,
+    "modifier_dexterity": 105,
+    "modifier_intelligence": 105,
+    "modifier_mind": 115,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "BLM": {
+    "modifier_strength": 45,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 115,
+    "modifier_mind": 75,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "ACN": {
+    "modifier_strength": 85,
+    "modifier_dexterity": 95,
+    "modifier_intelligence": 105,
+    "modifier_mind": 75,
+    "modifier_vitality": 95,
+    "modifier_hp": 100
+  },
+  "SMN": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 115,
+    "modifier_mind": 80,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "SCH": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 105,
+    "modifier_mind": 115,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "ROG": {
+    "modifier_strength": 80,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 60,
+    "modifier_mind": 70,
+    "modifier_vitality": 95,
+    "modifier_hp": 103
+  },
+  "NIN": {
+    "modifier_strength": 85,
+    "modifier_dexterity": 110,
+    "modifier_intelligence": 65,
+    "modifier_mind": 75,
+    "modifier_vitality": 100,
+    "modifier_hp": 108
+  },
+  "MCH": {
+    "modifier_strength": 85,
+    "modifier_dexterity": 115,
+    "modifier_intelligence": 80,
+    "modifier_mind": 85,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "DRK": {
+    "modifier_strength": 105,
+    "modifier_dexterity": 95,
+    "modifier_intelligence": 60,
+    "modifier_mind": 40,
+    "modifier_vitality": 110,
+    "modifier_hp": 140
+  },
+  "AST": {
+    "modifier_strength": 50,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 105,
+    "modifier_mind": 115,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "SAM": {
+    "modifier_strength": 112,
+    "modifier_dexterity": 108,
+    "modifier_intelligence": 60,
+    "modifier_mind": 50,
+    "modifier_vitality": 100,
+    "modifier_hp": 109
+  },
+  "RDM": {
+    "modifier_strength": 55,
+    "modifier_dexterity": 105,
+    "modifier_intelligence": 115,
+    "modifier_mind": 110,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "BLU": {
+    "modifier_strength": 70,
+    "modifier_dexterity": 110,
+    "modifier_intelligence": 115,
+    "modifier_mind": 105,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "GNB": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 95,
+    "modifier_intelligence": 60,
+    "modifier_mind": 100,
+    "modifier_vitality": 110,
+    "modifier_hp": 140
+  },
+  "DNC": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 115,
+    "modifier_intelligence": 85,
+    "modifier_mind": 80,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "RPR": {
+    "modifier_strength": 115,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 80,
+    "modifier_mind": 40,
+    "modifier_vitality": 105,
+    "modifier_hp": 115
+  },
+  "SGE": {
+    "modifier_strength": 60,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 115,
+    "modifier_mind": 115,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  },
+  "VPR": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 110,
+    "modifier_intelligence": 45,
+    "modifier_mind": 55,
+    "modifier_vitality": 100,
+    "modifier_hp": 111
+  },
+  "PCT": {
+    "modifier_strength": 50,
+    "modifier_dexterity": 110,
+    "modifier_intelligence": 115,
+    "modifier_mind": 80,
+    "modifier_vitality": 100,
+    "modifier_hp": 105
+  }
+}

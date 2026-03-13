@@ -1,0 +1,6 @@
+exe/cache/
+exe/config/
+py/GearSimulator/app/__pycache__/
+py/GearSimulator/cache/icons/
+py/GearSimulator/cache/fflogs_*.json
+py/GearSimulator/__pycache__/

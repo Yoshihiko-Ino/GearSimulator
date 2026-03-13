@@ -1,0 +1,2322 @@
+{
+  "43": {
+    "name": "Weakness",
+    "name_ja": "衰弱",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000043": {
+    "name": "Weakness",
+    "name_ja": "衰弱",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "49": {
+    "name": "Medicated",
+    "name_ja": "強化薬",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000049": {
+    "name": "Medicated",
+    "name_ja": "強化薬",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "50": {
+    "name": "Sprint",
+    "name_ja": "スプリント",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000050": {
+    "name": "Sprint",
+    "name_ja": "スプリント",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "160": {
+    "name": "Surecast",
+    "name_ja": "堅実魔",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000160": {
+    "name": "Surecast",
+    "name_ja": "堅実魔",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "167": {
+    "name": "Swiftcast",
+    "name_ja": "迅速魔",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000167": {
+    "name": "Swiftcast",
+    "name_ja": "迅速魔",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "418": {
+    "name": "Transcendent",
+    "name_ja": "生還",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000418": {
+    "name": "Transcendent",
+    "name_ja": "生還",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1203": {
+    "name": "Addle",
+    "name_ja": "アドル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001203": {
+    "name": "Addle",
+    "name_ja": "アドル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1204": {
+    "name": "Lucid Dreaming",
+    "name_ja": "ルーシッドドリーム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001204": {
+    "name": "Lucid Dreaming",
+    "name_ja": "ルーシッドドリーム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2056": {
+    "name": "",
+    "name_ja": "",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002056": {
+    "name": "",
+    "name_ja": "",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2412": {
+    "name": "Cover",
+    "name_ja": "かばう",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002412": {
+    "name": "Cover",
+    "name_ja": "かばう",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2656": {
+    "name": "Stun",
+    "name_ja": "スタン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002656": {
+    "name": "Stun",
+    "name_ja": "スタン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3004": {
+    "name": "First in Line",
+    "name_ja": "ファーストターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003004": {
+    "name": "First in Line",
+    "name_ja": "ファーストターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3005": {
+    "name": "Second in Line",
+    "name_ja": "セカンドターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003005": {
+    "name": "Second in Line",
+    "name_ja": "セカンドターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3006": {
+    "name": "Third in Line",
+    "name_ja": "サードターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003006": {
+    "name": "Third in Line",
+    "name_ja": "サードターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3065": {
+    "name": "Burns",
+    "name_ja": "火傷",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": true
+  },
+  "1003065": {
+    "name": "Burns",
+    "name_ja": "火傷",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": true
+  },
+  "3066": {
+    "name": "Burns",
+    "name_ja": "火傷",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": true
+  },
+  "1003066": {
+    "name": "Burns",
+    "name_ja": "火傷",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": true
+  },
+  "3451": {
+    "name": "Fourth in Line",
+    "name_ja": "フォースターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003451": {
+    "name": "Fourth in Line",
+    "name_ja": "フォースターゲット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3674": {
+    "name": "Subtractive Palette",
+    "name_ja": "サブトラクティブパレット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003674": {
+    "name": "Subtractive Palette",
+    "name_ja": "サブトラクティブパレット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3675": {
+    "name": "Aetherhues",
+    "name_ja": "色魔法2実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003675": {
+    "name": "Aetherhues",
+    "name_ja": "色魔法2実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3676": {
+    "name": "Aetherhues II",
+    "name_ja": "色魔法3実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003676": {
+    "name": "Aetherhues II",
+    "name_ja": "色魔法3実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3679": {
+    "name": "Rainbow Bright",
+    "name_ja": "レインボードリップ効果アップ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003679": {
+    "name": "Rainbow Bright",
+    "name_ja": "レインボードリップ効果アップ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3680": {
+    "name": "Hammer Time",
+    "name_ja": "ハンマーコンボ実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003680": {
+    "name": "Hammer Time",
+    "name_ja": "ハンマーコンボ実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3681": {
+    "name": "Starstruck",
+    "name_ja": "スタープリズム実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003681": {
+    "name": "Starstruck",
+    "name_ja": "スタープリズム実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3684": {
+    "name": "Smudge",
+    "name_ja": "スマッジ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003684": {
+    "name": "Smudge",
+    "name_ja": "スマッジ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3685": {
+    "name": "Starry Muse",
+    "name_ja": "イマジンスカイ",
+    "damage_up": 0.05,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003685": {
+    "name": "Starry Muse",
+    "name_ja": "イマジンスカイ",
+    "damage_up": 0.05,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3686": {
+    "name": "Tempera Coat",
+    "name_ja": "テンペラコート",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003686": {
+    "name": "Tempera Coat",
+    "name_ja": "テンペラコート",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3687": {
+    "name": "Tempera Grassa",
+    "name_ja": "テンペラグラッサ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003687": {
+    "name": "Tempera Grassa",
+    "name_ja": "テンペラグラッサ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3688": {
+    "name": "Hyperphantasia",
+    "name_ja": "インスタレーション",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003688": {
+    "name": "Hyperphantasia",
+    "name_ja": "インスタレーション",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3689": {
+    "name": "Inspiration",
+    "name_ja": "インスタレーション［被］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003689": {
+    "name": "Inspiration",
+    "name_ja": "インスタレーション［被］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3690": {
+    "name": "Subtractive Spectrum",
+    "name_ja": "サブトラクティブパレット実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003690": {
+    "name": "Subtractive Spectrum",
+    "name_ja": "サブトラクティブパレット実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3691": {
+    "name": "Monochrome Tones",
+    "name_ja": "色調反転",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003691": {
+    "name": "Monochrome Tones",
+    "name_ja": "色調反転",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3808": {
+    "name": "Directional Disregard",
+    "name_ja": "方向指定解除",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003808": {
+    "name": "Directional Disregard",
+    "name_ja": "方向指定解除",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "48": {
+    "name": "Well Fed",
+    "name_ja": "食事",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000048": {
+    "name": "Well Fed",
+    "name_ja": "食事",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "74": {
+    "name": "Sentinel",
+    "name_ja": "センチネル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000074": {
+    "name": "Sentinel",
+    "name_ja": "センチネル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "76": {
+    "name": "Fight or Flight",
+    "name_ja": "ファイト・オア・フライト",
+    "damage_up": 0.1,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000076": {
+    "name": "Fight or Flight",
+    "name_ja": "ファイト・オア・フライト",
+    "damage_up": 0.1,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "77": {
+    "name": "Bulwark",
+    "name_ja": "ブルワーク",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000077": {
+    "name": "Bulwark",
+    "name_ja": "ブルワーク",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "79": {
+    "name": "Iron Will",
+    "name_ja": "アイアンウィル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000079": {
+    "name": "Iron Will",
+    "name_ja": "アイアンウィル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "82": {
+    "name": "Hallowed Ground",
+    "name_ja": "インビンシブル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000082": {
+    "name": "Hallowed Ground",
+    "name_ja": "インビンシブル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1175": {
+    "name": "Passage of Arms",
+    "name_ja": "パッセージ・オブ・アームズ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001175": {
+    "name": "Passage of Arms",
+    "name_ja": "パッセージ・オブ・アームズ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1191": {
+    "name": "Rampart",
+    "name_ja": "ランパート",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001191": {
+    "name": "Rampart",
+    "name_ja": "ランパート",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1209": {
+    "name": "Arm's Length",
+    "name_ja": "アームズレングス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001209": {
+    "name": "Arm's Length",
+    "name_ja": "アームズレングス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1362": {
+    "name": "Divine Veil",
+    "name_ja": "ディヴァインヴェール",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001362": {
+    "name": "Divine Veil",
+    "name_ja": "ディヴァインヴェール",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1368": {
+    "name": "Requiescat",
+    "name_ja": "レクイエスカット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001368": {
+    "name": "Requiescat",
+    "name_ja": "レクイエスカット",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1856": {
+    "name": "Sheltron",
+    "name_ja": "シェルトロン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001856": {
+    "name": "Sheltron",
+    "name_ja": "シェルトロン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1902": {
+    "name": "Atonement Ready",
+    "name_ja": "ロイエ実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001902": {
+    "name": "Atonement Ready",
+    "name_ja": "ロイエ実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2673": {
+    "name": "Divine Might",
+    "name_ja": "神聖魔法効果アップ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002673": {
+    "name": "Divine Might",
+    "name_ja": "神聖魔法効果アップ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3019": {
+    "name": "Confiteor Ready",
+    "name_ja": "コンフィテオル実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003019": {
+    "name": "Confiteor Ready",
+    "name_ja": "コンフィテオル実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3827": {
+    "name": "Supplication Ready",
+    "name_ja": "ゲベート実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003827": {
+    "name": "Supplication Ready",
+    "name_ja": "ゲベート実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3828": {
+    "name": "Sepulchre Ready",
+    "name_ja": "グラブカッマー実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003828": {
+    "name": "Sepulchre Ready",
+    "name_ja": "グラブカッマー実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3847": {
+    "name": "Goring Blade Ready",
+    "name_ja": "ゴアブレード実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003847": {
+    "name": "Goring Blade Ready",
+    "name_ja": "ゴアブレード実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2674": {
+    "name": "Holy Sheltron",
+    "name_ja": "ホーリーシェルトロン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002674": {
+    "name": "Holy Sheltron",
+    "name_ja": "ホーリーシェルトロン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2675": {
+    "name": "Knight's Resolve",
+    "name_ja": "ナイトの堅守",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002675": {
+    "name": "Knight's Resolve",
+    "name_ja": "ナイトの堅守",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2676": {
+    "name": "Knight's Benediction",
+    "name_ja": "ナイトの加護",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002676": {
+    "name": "Knight's Benediction",
+    "name_ja": "ナイトの加護",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3829": {
+    "name": "Guardian",
+    "name_ja": "エクストリームガード",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003829": {
+    "name": "Guardian",
+    "name_ja": "エクストリームガード",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3830": {
+    "name": "Guardian's Will",
+    "name_ja": "エクストリームガード［バリア］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003830": {
+    "name": "Guardian's Will",
+    "name_ja": "エクストリームガード［バリア］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3831": {
+    "name": "Blade of Honor Ready",
+    "name_ja": "ブレード・オブ・オナー実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003831": {
+    "name": "Blade of Honor Ready",
+    "name_ja": "ブレード・オブ・オナー実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "841": {
+    "name": "Lightspeed",
+    "name_ja": "ライトスピード",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000841": {
+    "name": "Lightspeed",
+    "name_ja": "ライトスピード",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "845": {
+    "name": "Synastry",
+    "name_ja": "シナストリー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000845": {
+    "name": "Synastry",
+    "name_ja": "シナストリー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "848": {
+    "name": "Collective Unconscious",
+    "name_ja": "運命の輪",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000848": {
+    "name": "Collective Unconscious",
+    "name_ja": "運命の輪",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "849": {
+    "name": "Collective Unconscious",
+    "name_ja": "運命の輪：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000849": {
+    "name": "Collective Unconscious",
+    "name_ja": "運命の輪：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "956": {
+    "name": "Wheel of Fortune",
+    "name_ja": "運命の輪",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000956": {
+    "name": "Wheel of Fortune",
+    "name_ja": "運命の輪",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1224": {
+    "name": "Earthly Dominance",
+    "name_ja": "星の支配者",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001224": {
+    "name": "Earthly Dominance",
+    "name_ja": "星の支配者",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1248": {
+    "name": "Giant Dominance",
+    "name_ja": "巨星の支配者",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001248": {
+    "name": "Giant Dominance",
+    "name_ja": "巨星の支配者",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1878": {
+    "name": "Divination",
+    "name_ja": "ディヴィネーション",
+    "damage_up": 0.1,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001878": {
+    "name": "Divination",
+    "name_ja": "ディヴィネーション",
+    "damage_up": 0.1,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1879": {
+    "name": "Opposition",
+    "name_ja": "星天対抗",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001879": {
+    "name": "Opposition",
+    "name_ja": "星天対抗",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1889": {
+    "name": "Intersection",
+    "name_ja": "星天交差",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001889": {
+    "name": "Intersection",
+    "name_ja": "星天交差",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1890": {
+    "name": "Horoscope",
+    "name_ja": "ホロスコープ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001890": {
+    "name": "Horoscope",
+    "name_ja": "ホロスコープ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1891": {
+    "name": "Horoscope Helios",
+    "name_ja": "ホロスコープ・ヘリオス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001891": {
+    "name": "Horoscope Helios",
+    "name_ja": "ホロスコープ・ヘリオス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1892": {
+    "name": "Neutral Sect",
+    "name_ja": "ニュートラルセクト",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001892": {
+    "name": "Neutral Sect",
+    "name_ja": "ニュートラルセクト",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1921": {
+    "name": "Neutral Sect",
+    "name_ja": "ニュートラルセクト",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001921": {
+    "name": "Neutral Sect",
+    "name_ja": "ニュートラルセクト",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2718": {
+    "name": "Macrocosmos",
+    "name_ja": "マクロコスモス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002718": {
+    "name": "Macrocosmos",
+    "name_ja": "マクロコスモス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3893": {
+    "name": "Divining",
+    "name_ja": "オラクル実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003893": {
+    "name": "Divining",
+    "name_ja": "オラクル実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3894": {
+    "name": "Helios Conjunction",
+    "name_ja": "コンジャンクション・ヘリオス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003894": {
+    "name": "Helios Conjunction",
+    "name_ja": "コンジャンクション・ヘリオス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3895": {
+    "name": "Suntouched",
+    "name_ja": "サンサイン実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003895": {
+    "name": "Suntouched",
+    "name_ja": "サンサイン実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3896": {
+    "name": "Sun Sign",
+    "name_ja": "サンサイン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003896": {
+    "name": "Sun Sign",
+    "name_ja": "サンサイン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "297": {
+    "name": "Galvanize",
+    "name_ja": "鼓舞",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000297": {
+    "name": "Galvanize",
+    "name_ja": "鼓舞",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "299": {
+    "name": "Sacred Soil",
+    "name_ja": "野戦治療の陣：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000299": {
+    "name": "Sacred Soil",
+    "name_ja": "野戦治療の陣：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "304": {
+    "name": "Aetherflow",
+    "name_ja": "エーテルフロー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000304": {
+    "name": "Aetherflow",
+    "name_ja": "エーテルフロー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "791": {
+    "name": "Dissipation",
+    "name_ja": "転化",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000791": {
+    "name": "Dissipation",
+    "name_ja": "転化",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1896": {
+    "name": "Recitation",
+    "name_ja": "秘策",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001896": {
+    "name": "Recitation",
+    "name_ja": "秘策",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1918": {
+    "name": "Catalyze",
+    "name_ja": "激励",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001918": {
+    "name": "Catalyze",
+    "name_ja": "激励",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1944": {
+    "name": "Sacred Soil",
+    "name_ja": "野戦治療の陣",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001944": {
+    "name": "Sacred Soil",
+    "name_ja": "野戦治療の陣",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2710": {
+    "name": "Protraction",
+    "name_ja": "生命回生法",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002710": {
+    "name": "Protraction",
+    "name_ja": "生命回生法",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2711": {
+    "name": "Desperate Measures",
+    "name_ja": "怒濤の計",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002711": {
+    "name": "Desperate Measures",
+    "name_ja": "怒濤の計",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2712": {
+    "name": "Expedience",
+    "name_ja": "疾風の計",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002712": {
+    "name": "Expedience",
+    "name_ja": "疾風の計",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3882": {
+    "name": "Impact Imminent",
+    "name_ja": "埋伏の毒実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003882": {
+    "name": "Impact Imminent",
+    "name_ja": "埋伏の毒実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3884": {
+    "name": "Seraphism",
+    "name_ja": "セラフィズム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003884": {
+    "name": "Seraphism",
+    "name_ja": "セラフィズム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3885": {
+    "name": "Seraphism",
+    "name_ja": "セラフィズム：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003885": {
+    "name": "Seraphism",
+    "name_ja": "セラフィズム：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "157": {
+    "name": "Presence of Mind",
+    "name_ja": "神速魔",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000157": {
+    "name": "Presence of Mind",
+    "name_ja": "神速魔",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1217": {
+    "name": "Thin Air",
+    "name_ja": "シンエアー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001217": {
+    "name": "Thin Air",
+    "name_ja": "シンエアー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1218": {
+    "name": "Divine Benison",
+    "name_ja": "ディヴァインベニゾン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001218": {
+    "name": "Divine Benison",
+    "name_ja": "ディヴァインベニゾン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1219": {
+    "name": "Confession",
+    "name_ja": "インドゥルゲンティア",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001219": {
+    "name": "Confession",
+    "name_ja": "インドゥルゲンティア",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1872": {
+    "name": "Temperance",
+    "name_ja": "テンパランス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001872": {
+    "name": "Temperance",
+    "name_ja": "テンパランス",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1873": {
+    "name": "Temperance",
+    "name_ja": "テンパランス：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001873": {
+    "name": "Temperance",
+    "name_ja": "テンパランス：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1911": {
+    "name": "Asylum",
+    "name_ja": "アサイラム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001911": {
+    "name": "Asylum",
+    "name_ja": "アサイラム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1912": {
+    "name": "Asylum",
+    "name_ja": "アサイラム：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001912": {
+    "name": "Asylum",
+    "name_ja": "アサイラム：効果",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2709": {
+    "name": "Liturgy of the Bell",
+    "name_ja": "リタージー・オブ・ベル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002709": {
+    "name": "Liturgy of the Bell",
+    "name_ja": "リタージー・オブ・ベル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3879": {
+    "name": "Sacred Sight",
+    "name_ja": "グレアジャ実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003879": {
+    "name": "Sacred Sight",
+    "name_ja": "グレアジャ実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3880": {
+    "name": "Medica III",
+    "name_ja": "メディガ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003880": {
+    "name": "Medica III",
+    "name_ja": "メディガ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3881": {
+    "name": "Divine Grace",
+    "name_ja": "ディヴァインカレス実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003881": {
+    "name": "Divine Grace",
+    "name_ja": "ディヴァインカレス実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3903": {
+    "name": "Divine Caress",
+    "name_ja": "ディヴァインカレス［バリア］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003903": {
+    "name": "Divine Caress",
+    "name_ja": "ディヴァインカレス［バリア］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3904": {
+    "name": "Divine Aura",
+    "name_ja": "ディヴァインカレス［回］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003904": {
+    "name": "Divine Aura",
+    "name_ja": "ディヴァインカレス［回］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "158": {
+    "name": "Regen",
+    "name_ja": "リジェネ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000158": {
+    "name": "Regen",
+    "name_ja": "リジェネ",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2708": {
+    "name": "Aquaveil",
+    "name_ja": "アクアヴェール",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002708": {
+    "name": "Aquaveil",
+    "name_ja": "アクアヴェール",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "742": {
+    "name": "Blood Weapon",
+    "name_ja": "ブラッドウェポン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000742": {
+    "name": "Blood Weapon",
+    "name_ja": "ブラッドウェポン",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "746": {
+    "name": "Dark Mind",
+    "name_ja": "ダークマインド",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000746": {
+    "name": "Dark Mind",
+    "name_ja": "ダークマインド",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "749": {
+    "name": "Salted Earth",
+    "name_ja": "ソルトアース",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000749": {
+    "name": "Salted Earth",
+    "name_ja": "ソルトアース",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "810": {
+    "name": "Living Dead",
+    "name_ja": "リビングデッド",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1000810": {
+    "name": "Living Dead",
+    "name_ja": "リビングデッド",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1178": {
+    "name": "Blackest Night",
+    "name_ja": "ブラックナイト",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001178": {
+    "name": "Blackest Night",
+    "name_ja": "ブラックナイト",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1894": {
+    "name": "Dark Missionary",
+    "name_ja": "ダークミッショナリー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1001894": {
+    "name": "Dark Missionary",
+    "name_ja": "ダークミッショナリー",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "2682": {
+    "name": "Oblation",
+    "name_ja": "オブレーション",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1002682": {
+    "name": "Oblation",
+    "name_ja": "オブレーション",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3255": {
+    "name": "Undead Rebirth",
+    "name_ja": "デッドリバース",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003255": {
+    "name": "Undead Rebirth",
+    "name_ja": "デッドリバース",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3835": {
+    "name": "Shadowed Vigil",
+    "name_ja": "シャドウヴィジル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003835": {
+    "name": "Shadowed Vigil",
+    "name_ja": "シャドウヴィジル",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3836": {
+    "name": "Delirium",
+    "name_ja": "ブラッドデリリアム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003836": {
+    "name": "Delirium",
+    "name_ja": "ブラッドデリリアム",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3837": {
+    "name": "Scorn",
+    "name_ja": "ディセスティーム実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003837": {
+    "name": "Scorn",
+    "name_ja": "ディセスティーム実行可",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "3902": {
+    "name": "Vigilant",
+    "name_ja": "シャドウヴィジル［被］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  },
+  "1003902": {
+    "name": "Vigilant",
+    "name_ja": "シャドウヴィジル［被］",
+    "damage_up": 0.0,
+    "crit_rate_up": 0.0,
+    "dhit_rate_up": 0.0,
+    "force_crit": false,
+    "force_dhit": false,
+    "dot_effect": false
+  }
+}

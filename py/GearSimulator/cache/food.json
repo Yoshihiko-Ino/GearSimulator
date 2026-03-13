@@ -1,0 +1,3026 @@
+[
+  {
+    "food_id": 428,
+    "name": "Ovim Cordon Bleu",
+    "name_ja": "オヴィム・コルドンブルー",
+    "level_item": 430,
+    "source_row_id": 27879,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 58
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 59
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 35
+      }
+    }
+  },
+  {
+    "food_id": 429,
+    "name": "Lemonade",
+    "name_ja": "レモネード",
+    "level_item": 430,
+    "source_row_id": 27880,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 58
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 59
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 35
+      }
+    }
+  },
+  {
+    "food_id": 430,
+    "name": "Jellied Harcot",
+    "name_ja": "ハーコットゼリー",
+    "level_item": 430,
+    "source_row_id": 27881,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 58
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 59
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 35
+      }
+    }
+  },
+  {
+    "food_id": 431,
+    "name": "Oysters on the Half Shell",
+    "name_ja": "ローエディブルオイスター",
+    "level_item": 430,
+    "source_row_id": 27882,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 58
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 59
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 35
+      }
+    }
+  },
+  {
+    "food_id": 432,
+    "name": "Creamy Salmon Pasta",
+    "name_ja": "サーモンクリームパスタ",
+    "level_item": 450,
+    "source_row_id": 27883,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 433,
+    "name": "King Salmon Meuniere",
+    "name_ja": "キングサーモンムニエル",
+    "level_item": 450,
+    "source_row_id": 27884,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 434,
+    "name": "Popoto Salad",
+    "name_ja": "ポポトサラダ",
+    "level_item": 450,
+    "source_row_id": 27885,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 435,
+    "name": "Robe Lettuce Salad",
+    "name_ja": "ウィザードレタスサラダ",
+    "level_item": 450,
+    "source_row_id": 27886,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 436,
+    "name": "Pixieberry Tea",
+    "name_ja": "ピクシーベリーティー",
+    "level_item": 450,
+    "source_row_id": 27887,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 437,
+    "name": "Pixieberry Cheesecake",
+    "name_ja": "ベリーチーズケーキ",
+    "level_item": 450,
+    "source_row_id": 27888,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 438,
+    "name": "Kukuru Rusk",
+    "name_ja": "ククルラスク",
+    "level_item": 450,
+    "source_row_id": 27889,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 439,
+    "name": "Lemon Curd Sachertorte",
+    "name_ja": "レモンカードザッハトルテ",
+    "level_item": 450,
+    "source_row_id": 27890,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 440,
+    "name": "Rare Roast Beef",
+    "name_ja": "高級ローストビーフ",
+    "level_item": 450,
+    "source_row_id": 27891,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 441,
+    "name": "Exquisite Beef Stew",
+    "name_ja": "高級ビーフシチュー",
+    "level_item": 450,
+    "source_row_id": 27892,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 62
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 37
+      }
+    }
+  },
+  {
+    "food_id": 469,
+    "name": "Ovim Meatballs",
+    "name_ja": "オヴィムミートボール",
+    "level_item": 480,
+    "source_row_id": 29497,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 470,
+    "name": "Mors",
+    "name_ja": "モルス",
+    "level_item": 480,
+    "source_row_id": 29498,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 473,
+    "name": "Lemon Waffle",
+    "name_ja": "レモンワッフル",
+    "level_item": 480,
+    "source_row_id": 29499,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 474,
+    "name": "Honey Croissant",
+    "name_ja": "ハニークロワッサン",
+    "level_item": 480,
+    "source_row_id": 29500,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 471,
+    "name": "Sausage and Sauerkraut",
+    "name_ja": "ソーセージ・ザワークラウト",
+    "level_item": 480,
+    "source_row_id": 29501,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 472,
+    "name": "Stuffed Highland Cabbage",
+    "name_ja": "高地風挽肉のキャベツ巻き",
+    "level_item": 480,
+    "source_row_id": 29502,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 475,
+    "name": "Pickled Herring",
+    "name_ja": "ヘリングマリネ",
+    "level_item": 480,
+    "source_row_id": 29503,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 476,
+    "name": "Herring Pie",
+    "name_ja": "ヘリングパイ",
+    "level_item": 480,
+    "source_row_id": 29504,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 477,
+    "name": "Farmer's Breakfast",
+    "name_ja": "ファーマーズブレックファスト",
+    "level_item": 480,
+    "source_row_id": 29505,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 478,
+    "name": "Silkie Pudding",
+    "name_ja": "シルキープディング",
+    "level_item": 480,
+    "source_row_id": 29506,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 66
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 68
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 40
+      }
+    }
+  },
+  {
+    "food_id": 491,
+    "name": "Pizza",
+    "name_ja": "ピッツァ",
+    "level_item": 510,
+    "source_row_id": 31898,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 492,
+    "name": "Mist Spinach Quiche",
+    "name_ja": "ミストスピナッチキッシュ",
+    "level_item": 510,
+    "source_row_id": 31899,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 493,
+    "name": "Chicken Fettuccine",
+    "name_ja": "チキンフェットゥチーネ",
+    "level_item": 510,
+    "source_row_id": 31900,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 494,
+    "name": "Smoked Chicken",
+    "name_ja": "スモークチキン",
+    "level_item": 510,
+    "source_row_id": 31901,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 495,
+    "name": "Golden Pineapple Juice",
+    "name_ja": "ゴールドパインジュース",
+    "level_item": 510,
+    "source_row_id": 31902,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 496,
+    "name": "Pineapple Salad",
+    "name_ja": "パインサラダ",
+    "level_item": 510,
+    "source_row_id": 31903,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 497,
+    "name": "Zefir",
+    "name_ja": "ゼフィール",
+    "level_item": 510,
+    "source_row_id": 31904,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 498,
+    "name": "Twilight Popoto Salad",
+    "name_ja": "アップルポポトサラダ",
+    "level_item": 510,
+    "source_row_id": 31905,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 499,
+    "name": "Broad Bean Curry",
+    "name_ja": "ビーンカレー",
+    "level_item": 510,
+    "source_row_id": 31906,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 500,
+    "name": "Lemon Muffin",
+    "name_ja": "レモンマフィン",
+    "level_item": 510,
+    "source_row_id": 31907,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 70
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 43
+      }
+    }
+  },
+  {
+    "food_id": 511,
+    "name": "Archon Loaf",
+    "name_ja": "賢人パン",
+    "level_item": 520,
+    "source_row_id": 36036,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 72
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 77
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 512,
+    "name": "Zurek",
+    "name_ja": "ジュレック",
+    "level_item": 520,
+    "source_row_id": 36037,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 72
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 77
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 513,
+    "name": "Amra Salad",
+    "name_ja": "アームラサラダ",
+    "level_item": 525,
+    "source_row_id": 36038,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 73
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 78
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 514,
+    "name": "Amra Lassi",
+    "name_ja": "アームララッシー",
+    "level_item": 525,
+    "source_row_id": 36039,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 73
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 78
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 515,
+    "name": "Island Miq'abob",
+    "name_ja": "ミコッテ風島の幸串焼",
+    "level_item": 525,
+    "source_row_id": 36040,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 73
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 78
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 516,
+    "name": "King Crab Cake",
+    "name_ja": "キングクラブケーキ",
+    "level_item": 530,
+    "source_row_id": 36041,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 80
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 517,
+    "name": "Ukha",
+    "name_ja": "ウハー",
+    "level_item": 530,
+    "source_row_id": 36042,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 80
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 518,
+    "name": "Borscht",
+    "name_ja": "ボルシチ",
+    "level_item": 530,
+    "source_row_id": 36043,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 80
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 519,
+    "name": "Wine-dark Soup",
+    "name_ja": "ビーツスープ",
+    "level_item": 533,
+    "source_row_id": 36044,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 80
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 520,
+    "name": "Glory Be Soup",
+    "name_ja": "エンペラースープ",
+    "level_item": 533,
+    "source_row_id": 36045,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 74
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 80
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 523,
+    "name": "Hamsa Curry",
+    "name_ja": "ハンサカレー",
+    "level_item": 539,
+    "source_row_id": 36048,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 75
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 81
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 45
+      }
+    }
+  },
+  {
+    "food_id": 524,
+    "name": "Karniyarik",
+    "name_ja": "カルヌヤルク",
+    "level_item": 539,
+    "source_row_id": 36049,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 75
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 81
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 45
+      }
+    }
+  },
+  {
+    "food_id": 525,
+    "name": "Spicy Shakshouka",
+    "name_ja": "スパイシーシャクシュカ",
+    "level_item": 539,
+    "source_row_id": 36050,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 75
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 81
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 45
+      }
+    }
+  },
+  {
+    "food_id": 526,
+    "name": "Lentil Curry",
+    "name_ja": "レンティルカレー",
+    "level_item": 539,
+    "source_row_id": 36051,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 75
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 81
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 45
+      }
+    }
+  },
+  {
+    "food_id": 527,
+    "name": "Skyr",
+    "name_ja": "スキール",
+    "level_item": 539,
+    "source_row_id": 36052,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 75
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 81
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 45
+      }
+    }
+  },
+  {
+    "food_id": 530,
+    "name": "Philosopher's Sandwich",
+    "name_ja": "賢人サンドイッチ",
+    "level_item": 545,
+    "source_row_id": 36055,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 76
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 46
+      }
+    }
+  },
+  {
+    "food_id": 531,
+    "name": "Salted Thavnairian Cod",
+    "name_ja": "ソルトシャロウコッド",
+    "level_item": 545,
+    "source_row_id": 36056,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 76
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 46
+      }
+    }
+  },
+  {
+    "food_id": 532,
+    "name": "Coconut Cod Chowder",
+    "name_ja": "ココナッツコッドチャウダー",
+    "level_item": 545,
+    "source_row_id": 36057,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 76
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 46
+      }
+    }
+  },
+  {
+    "food_id": 533,
+    "name": "The Noodles of Elpis",
+    "name_ja": "パスタ・オブ・エルピス",
+    "level_item": 545,
+    "source_row_id": 36058,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 76
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 46
+      }
+    }
+  },
+  {
+    "food_id": 534,
+    "name": "Giant Popoto Pancakes",
+    "name_ja": "ジャイアントポポトパンケーキ",
+    "level_item": 545,
+    "source_row_id": 36059,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 76
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 46
+      }
+    }
+  },
+  {
+    "food_id": 537,
+    "name": "Elpis Deipnon",
+    "name_ja": "ディッシュ・オブ・エルピス",
+    "level_item": 560,
+    "source_row_id": 36062,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 85
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 50
+      }
+    }
+  },
+  {
+    "food_id": 538,
+    "name": "Baked Alien Soup",
+    "name_ja": "エイリアングラタンスープ",
+    "level_item": 560,
+    "source_row_id": 36063,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 85
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 50
+      }
+    }
+  },
+  {
+    "food_id": 539,
+    "name": "Sykon Salad",
+    "name_ja": "シューコンサラダ",
+    "level_item": 560,
+    "source_row_id": 36064,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 85
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 50
+      }
+    }
+  },
+  {
+    "food_id": 540,
+    "name": "Sykon Compote",
+    "name_ja": "シューコンコンポート",
+    "level_item": 560,
+    "source_row_id": 36065,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 85
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 50
+      }
+    }
+  },
+  {
+    "food_id": 541,
+    "name": "Sykon Bavarois",
+    "name_ja": "ババロア・オ・シューコン",
+    "level_item": 560,
+    "source_row_id": 36066,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 82
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 85
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 50
+      }
+    }
+  },
+  {
+    "food_id": 542,
+    "name": "Archon Burger",
+    "name_ja": "賢人バーガー",
+    "level_item": 580,
+    "source_row_id": 36067,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 543,
+    "name": "Beef Stroganoff",
+    "name_ja": "ビーフストロガノフ",
+    "level_item": 580,
+    "source_row_id": 36068,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 544,
+    "name": "Pumpkin Ratatouille",
+    "name_ja": "パンプキンラタトゥイユ",
+    "level_item": 580,
+    "source_row_id": 36069,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 545,
+    "name": "Pumpkin Potage",
+    "name_ja": "パンプキンポタージュ",
+    "level_item": 580,
+    "source_row_id": 36070,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 546,
+    "name": "Peach Juice",
+    "name_ja": "ピーチジュース",
+    "level_item": 580,
+    "source_row_id": 36071,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 547,
+    "name": "Peach Tart",
+    "name_ja": "ピーチタルト",
+    "level_item": 580,
+    "source_row_id": 36072,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 548,
+    "name": "Sykon Cookie",
+    "name_ja": "シューコンクッキー",
+    "level_item": 580,
+    "source_row_id": 36073,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 549,
+    "name": "Thavnairian Chai",
+    "name_ja": "サベネアンチャイ",
+    "level_item": 580,
+    "source_row_id": 36074,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 550,
+    "name": "Scallop Salad",
+    "name_ja": "スカロップサラダ",
+    "level_item": 580,
+    "source_row_id": 36075,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 551,
+    "name": "Scallop Curry",
+    "name_ja": "スカロップカレー",
+    "level_item": 580,
+    "source_row_id": 36076,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 90
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 93
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 54
+      }
+    }
+  },
+  {
+    "food_id": 571,
+    "name": "Melon Pie",
+    "name_ja": "メロンパイ",
+    "level_item": 610,
+    "source_row_id": 38261,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 572,
+    "name": "Melon Juice",
+    "name_ja": "メロンジュース",
+    "level_item": 610,
+    "source_row_id": 38262,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 573,
+    "name": "Sunset Carrot Nibbles",
+    "name_ja": "サンセットカロットラペ",
+    "level_item": 610,
+    "source_row_id": 38263,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 574,
+    "name": "Carrot Pudding",
+    "name_ja": "カロットプディング",
+    "level_item": 610,
+    "source_row_id": 38264,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 575,
+    "name": "Gyros",
+    "name_ja": "ギロピタ",
+    "level_item": 610,
+    "source_row_id": 38265,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 96
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 576,
+    "name": "Loaghtan Rump Steak",
+    "name_ja": "ロフタンのランプステーキ",
+    "level_item": 610,
+    "source_row_id": 38266,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 577,
+    "name": "Piennolo Tomato Salad",
+    "name_ja": "ピエンノロトマトサラダ",
+    "level_item": 610,
+    "source_row_id": 38267,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 578,
+    "name": "Garlean Pizza",
+    "name_ja": "ガレアンピッツァ",
+    "level_item": 610,
+    "source_row_id": 38268,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 579,
+    "name": "Urchin Pasta",
+    "name_ja": "アーチンテリーヌパスタ",
+    "level_item": 610,
+    "source_row_id": 38269,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 96
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 580,
+    "name": "King Urchin Loaf",
+    "name_ja": "キングアーチンテリーヌ",
+    "level_item": 610,
+    "source_row_id": 38270,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 97
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 118
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 58
+      }
+    }
+  },
+  {
+    "food_id": 593,
+    "name": "Honeyed Dragonfruit",
+    "name_ja": "蜂蜜漬けドラゴンフルーツ",
+    "level_item": 640,
+    "source_row_id": 39869,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 594,
+    "name": "Dragonfruit Blend",
+    "name_ja": "ドラゴンフルーツスムージー",
+    "level_item": 640,
+    "source_row_id": 39870,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 595,
+    "name": "Baba Ghanoush",
+    "name_ja": "ババガヌーシュ",
+    "level_item": 640,
+    "source_row_id": 39871,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 596,
+    "name": "Baked Eggplant",
+    "name_ja": "ベイクドダークエッグプラント",
+    "level_item": 640,
+    "source_row_id": 39872,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 597,
+    "name": "Spicy Stellar Soup",
+    "name_ja": "スペーススパイシースープ",
+    "level_item": 640,
+    "source_row_id": 39873,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 598,
+    "name": "Tandoori Raptor",
+    "name_ja": "タンドリーラプトル",
+    "level_item": 640,
+    "source_row_id": 39874,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 599,
+    "name": "Caviar Sandwich",
+    "name_ja": "キャビアサンド",
+    "level_item": 640,
+    "source_row_id": 39875,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 600,
+    "name": "Caviar Canapes",
+    "name_ja": "キャビアカナッペ",
+    "level_item": 640,
+    "source_row_id": 39876,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 601,
+    "name": "Marinated Broccoflower",
+    "name_ja": "ブロコフラワーマリネ",
+    "level_item": 640,
+    "source_row_id": 39877,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 602,
+    "name": "Broccoflower Stew",
+    "name_ja": "ブロコフラワーシチュー",
+    "level_item": 640,
+    "source_row_id": 39878,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 103
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 143
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 62
+      }
+    }
+  },
+  {
+    "food_id": 613,
+    "name": "Boiled Alpaca Steak",
+    "name_ja": "ボイルド・アルパカステーキ",
+    "level_item": 650,
+    "source_row_id": 44073,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 105
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 152
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 616,
+    "name": "Mezcal-marinated Swampmonk",
+    "name_ja": "スワンプモンクのメスカルソースがけ",
+    "level_item": 653,
+    "source_row_id": 44074,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 106
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 155
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 636,
+    "name": "Acqua Pazza",
+    "name_ja": "アクアパッツァ",
+    "level_item": 680,
+    "source_row_id": 44076,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 113
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 166
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 68
+      }
+    }
+  },
+  {
+    "food_id": 615,
+    "name": "Shrimp Cocktail",
+    "name_ja": "シュリンプカクテル",
+    "level_item": 650,
+    "source_row_id": 44079,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 105
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 152
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 614,
+    "name": "Omelette Rice",
+    "name_ja": "オムライス",
+    "level_item": 650,
+    "source_row_id": 44081,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 105
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 152
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 618,
+    "name": "Royal Toast",
+    "name_ja": "ロイヤルトースト",
+    "level_item": 656,
+    "source_row_id": 44082,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 107
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 158
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 619,
+    "name": "Banana Ponzecake",
+    "name_ja": "バナナパンズケーキ",
+    "level_item": 656,
+    "source_row_id": 44083,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 107
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 158
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 620,
+    "name": "Maple Teriyaki",
+    "name_ja": "照り焼きメープルチキン",
+    "level_item": 656,
+    "source_row_id": 44084,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 107
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 158
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 622,
+    "name": "Sweetmuffin",
+    "name_ja": "スイートマフィン",
+    "level_item": 660,
+    "source_row_id": 44085,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 108
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 163
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 626,
+    "name": "Creamy Hot Chocolate",
+    "name_ja": "ホイップ・ホットココア",
+    "level_item": 670,
+    "source_row_id": 44086,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 110
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 164
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 66
+      }
+    }
+  },
+  {
+    "food_id": 641,
+    "name": "Creamy Alpaca Pasta",
+    "name_ja": "アルパカクリームパスタ",
+    "level_item": 690,
+    "source_row_id": 44087,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 121
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 177
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 73
+      }
+    }
+  },
+  {
+    "food_id": 629,
+    "name": "Tender Shortcake",
+    "name_ja": "テンダーショートケーキ",
+    "level_item": 670,
+    "source_row_id": 44089,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 110
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 164
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 66
+      }
+    }
+  },
+  {
+    "food_id": 642,
+    "name": "Broccoli and Spinach Saute",
+    "name_ja": "ブロコスピナッチソテー",
+    "level_item": 690,
+    "source_row_id": 44090,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 121
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 177
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 73
+      }
+    }
+  },
+  {
+    "food_id": 632,
+    "name": "Roast Rroneek",
+    "name_ja": "ローストロネーク",
+    "level_item": 680,
+    "source_row_id": 44092,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 113
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 166
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 68
+      }
+    }
+  },
+  {
+    "food_id": 621,
+    "name": "Spaghetti al Olio e Peperoncino",
+    "name_ja": "オーリオ・ペペロンチーノ",
+    "level_item": 660,
+    "source_row_id": 44093,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 108
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 163
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 617,
+    "name": "Grilled Urqotrout",
+    "name_ja": "グリルドオルコトラウト",
+    "level_item": 653,
+    "source_row_id": 44094,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 106
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 155
+      },
+      "0": {
+        "percentage": 0,
+        "maximum": 0
+      }
+    }
+  },
+  {
+    "food_id": 635,
+    "name": "Driftwood Catfish Pie",
+    "name_ja": "キャットフィッシュパイ",
+    "level_item": 680,
+    "source_row_id": 44095,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 113
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 166
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 68
+      }
+    }
+  },
+  {
+    "food_id": 643,
+    "name": "Vegetable Soup",
+    "name_ja": "ベジタブルスープ",
+    "level_item": 690,
+    "source_row_id": 44096,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 121
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 177
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 73
+      }
+    }
+  },
+  {
+    "food_id": 633,
+    "name": "Mesquite Juice",
+    "name_ja": "メスキートジュース",
+    "level_item": 680,
+    "source_row_id": 44097,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 113
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 166
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 68
+      }
+    }
+  },
+  {
+    "food_id": 640,
+    "name": "Mesquite Soup",
+    "name_ja": "メスキートスープ",
+    "level_item": 690,
+    "source_row_id": 44098,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 121
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 177
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 73
+      }
+    }
+  },
+  {
+    "food_id": 634,
+    "name": "Fruit and Aloe Jelly",
+    "name_ja": "森の果実とアロエのゼリー",
+    "level_item": 680,
+    "source_row_id": 44100,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 113
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 166
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 68
+      }
+    }
+  },
+  {
+    "food_id": 627,
+    "name": "Tart Turali Tart",
+    "name_ja": "トラルフルーツのタルト",
+    "level_item": 670,
+    "source_row_id": 44101,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 110
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 164
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 66
+      }
+    }
+  },
+  {
+    "food_id": 628,
+    "name": "Wild Banana Blend",
+    "name_ja": "ワイルドバナナスムージー",
+    "level_item": 670,
+    "source_row_id": 44102,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 110
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 164
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 66
+      }
+    }
+  },
+  {
+    "food_id": 639,
+    "name": "Tacos de Carne Asada",
+    "name_ja": "タコス・カルネ・アサーダ",
+    "level_item": 690,
+    "source_row_id": 44104,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 121
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 177
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 73
+      }
+    }
+  },
+  {
+    "food_id": 625,
+    "name": "Tacos Al Pastor",
+    "name_ja": "タコス・アル・パストール",
+    "level_item": 670,
+    "source_row_id": 44105,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 110
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 164
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 66
+      }
+    }
+  },
+  {
+    "food_id": 652,
+    "name": "Roast Chicken",
+    "name_ja": "ローストチキン",
+    "level_item": 710,
+    "source_row_id": 44175,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 653,
+    "name": "Chicken Pasta",
+    "name_ja": "チキンパスタ",
+    "level_item": 710,
+    "source_row_id": 44176,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 654,
+    "name": "Churrasco",
+    "name_ja": "シュラスコ",
+    "level_item": 710,
+    "source_row_id": 44177,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 655,
+    "name": "Moqueca",
+    "name_ja": "ムケッカ",
+    "level_item": 710,
+    "source_row_id": 44178,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 656,
+    "name": "Cinnamon Cream Coffee",
+    "name_ja": "シナモンホイップコーヒー",
+    "level_item": 710,
+    "source_row_id": 44179,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 657,
+    "name": "Coffee Kukuru Rusks",
+    "name_ja": "コーヒーククルラスク",
+    "level_item": 710,
+    "source_row_id": 44180,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 658,
+    "name": "Navel Orange Cookies",
+    "name_ja": "ネーブルオレンジクッキー",
+    "level_item": 710,
+    "source_row_id": 44181,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 659,
+    "name": "Pineapple Orange Jelly",
+    "name_ja": "パインオレンジゼリー",
+    "level_item": 710,
+    "source_row_id": 44182,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 660,
+    "name": "Lobster Bisque",
+    "name_ja": "ロブスタービスク",
+    "level_item": 710,
+    "source_row_id": 44183,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 661,
+    "name": "Boiled Lobster",
+    "name_ja": "ボイルドロブスター",
+    "level_item": 710,
+    "source_row_id": 44184,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 132
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 203
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 79
+      }
+    }
+  },
+  {
+    "food_id": 676,
+    "name": "Paes de Queijo",
+    "name_ja": "ポン・デ・ケージョ",
+    "level_item": 740,
+    "source_row_id": 46000,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 677,
+    "name": "Bubble Tea",
+    "name_ja": "タピオカミルクティー",
+    "level_item": 740,
+    "source_row_id": 46001,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 678,
+    "name": "Sweet Maple Mate",
+    "name_ja": "マテ・スイートティー",
+    "level_item": 740,
+    "source_row_id": 46002,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 679,
+    "name": "Mate Cookie",
+    "name_ja": "高級マテ茶クッキー",
+    "level_item": 740,
+    "source_row_id": 46003,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 680,
+    "name": "Alpaca Stew",
+    "name_ja": "アルパカシチュー",
+    "level_item": 740,
+    "source_row_id": 46004,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 681,
+    "name": "Lomo Saltado",
+    "name_ja": "ロネーク・サルタード",
+    "level_item": 740,
+    "source_row_id": 46005,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 682,
+    "name": "Solterito",
+    "name_ja": "エンサラーダ・デ・ケソ",
+    "level_item": 740,
+    "source_row_id": 46006,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 683,
+    "name": "Mollete",
+    "name_ja": "モジェテ",
+    "level_item": 740,
+    "source_row_id": 46007,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 684,
+    "name": "Ground Woolback Steak",
+    "name_ja": "ウールバックハンバーグ",
+    "level_item": 740,
+    "source_row_id": 46008,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 685,
+    "name": "Woolback Steak",
+    "name_ja": "ウールバックステーキ",
+    "level_item": 740,
+    "source_row_id": 46009,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 142
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 246
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 85
+      }
+    }
+  },
+  {
+    "food_id": 701,
+    "name": "Nachos",
+    "name_ja": "ナチョス",
+    "level_item": 770,
+    "source_row_id": 49239,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "45": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 702,
+    "name": "Caramel Popcorn",
+    "name_ja": "キャラメルポップコーン",
+    "level_item": 770,
+    "source_row_id": 49240,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "27": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 703,
+    "name": "Prune Ponzecake",
+    "name_ja": "プルーンパンズケーキ",
+    "level_item": 770,
+    "source_row_id": 49241,
+    "bonuses": {
+      "6": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 704,
+    "name": "Prune-packed Fruitcake",
+    "name_ja": "プルーンシュトレン",
+    "level_item": 770,
+    "source_row_id": 49242,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "6": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 705,
+    "name": "Rroneek au Gratin",
+    "name_ja": "ロネークグラタン",
+    "level_item": 770,
+    "source_row_id": 49243,
+    "bonuses": {
+      "46": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 706,
+    "name": "Popoto Potage",
+    "name_ja": "ポポトポタージュ",
+    "level_item": 770,
+    "source_row_id": 49244,
+    "bonuses": {
+      "27": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "46": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 699,
+    "name": "Rock-fisted Popoto Stew",
+    "name_ja": "げんこつポポトのシチュー",
+    "level_item": 770,
+    "source_row_id": 49245,
+    "bonuses": {
+      "22": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 700,
+    "name": "Rock-fisted Popoto Salad",
+    "name_ja": "げんこつポポトのサラダ",
+    "level_item": 770,
+    "source_row_id": 49246,
+    "bonuses": {
+      "45": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "22": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 707,
+    "name": "Clam Cake",
+    "name_ja": "クラムケーキ",
+    "level_item": 770,
+    "source_row_id": 49247,
+    "bonuses": {
+      "19": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "44": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  },
+  {
+    "food_id": 708,
+    "name": "Quahog Chowder",
+    "name_ja": "クアホッグチャウダー",
+    "level_item": 770,
+    "source_row_id": 49248,
+    "bonuses": {
+      "44": {
+        "percentage": 10,
+        "maximum": 151
+      },
+      "3": {
+        "percentage": 10,
+        "maximum": 297
+      },
+      "19": {
+        "percentage": 10,
+        "maximum": 91
+      }
+    }
+  }
+]
