@@ -24,7 +24,5 @@ FF14 用の装備・マテリア・食事シミュレーターです。
 2. `py/GearSimulator` で依存関係をインストールします。
 3. `run_gui.bat` を実行します。
 
-## 補足
-- 個人情報は含めていません。
-- FFLogs のクライアントID、クライアントシークレット、保存セット、private cache は含めていません。
-- 詳細な変更履歴は [CHANGELOG.md](CHANGELOG.md) を参照してください。
+## 変更履歴
+- 詳細は [CHANGELOG.md](CHANGELOG.md) を参照してください。

@@ -14,6 +14,5 @@ py/GearSimulator
 - Python 版の配布ファイルです。
 - 依存関係をインストールした後、run_gui.bat から起動できます。
 
-補足
-- 個人情報は含めていません。
-- FFLogs のクライアントID、クライアントシークレット、保存セット、private cache は含めていません。
+変更履歴
+- 詳細は CHANGELOG.md を参照してください。
