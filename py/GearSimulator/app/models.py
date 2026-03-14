@@ -108,6 +108,8 @@ class MateriaSlotSelection:
 class ItemSelection:
     item_id: Optional[int] = None
     materia: List[MateriaSlotSelection] = field(default_factory=list)
+    lock_item: bool = False
+    lock_materia: bool = False
 
 
 @dataclass
@@ -131,6 +133,8 @@ class Gearset:
             "items": {
                 slot: {
                     "item_id": sel.item_id,
+                    "lock_item": bool(getattr(sel, "lock_item", False)),
+                    "lock_materia": bool(getattr(sel, "lock_materia", False)),
                     "materia": [
                         {"base_param": (m.base_param if m else 0), "grade": (m.grade if m else 0)}
                         for m in (sel.materia or [])
@@ -150,7 +154,12 @@ class Gearset:
                 base_param = m.get("base_param", 0) or 0
                 grade = m.get("grade", 0) or 0
                 materia.append(MateriaSlotSelection(base_param=base_param, grade=grade))
-            items[slot] = ItemSelection(item_id=sel.get("item_id"), materia=materia)
+            items[slot] = ItemSelection(
+                item_id=sel.get("item_id"),
+                materia=materia,
+                lock_item=bool(sel.get("lock_item", False)),
+                lock_materia=bool(sel.get("lock_materia", False)),
+            )
         return cls(
             job=data.get("job"),
             items=items,

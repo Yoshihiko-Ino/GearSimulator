@@ -10,7 +10,7 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QThreadPool, QSize, QTimer
+from PySide6.QtCore import Qt, QThreadPool, QSize, QTimer, QSignalBlocker
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -500,6 +500,8 @@ class MainWindow(QMainWindow):
         self._pending_fight_id: Optional[int] = None
         self._pending_actor_id: Optional[int] = None
         self.slot_tables: Dict[str, QTableWidget] = {}
+        self.slot_lock_item_checks: Dict[str, QCheckBox] = {}
+        self.slot_lock_materia_checks: Dict[str, QCheckBox] = {}
         self._materia_icon_cache: Dict[str, QIcon] = {}
         self.action_data: Dict[int, object] = {}
         self.status_data: Dict[int, object] = {}
@@ -514,6 +516,7 @@ class MainWindow(QMainWindow):
         self._is_populating: bool = False
         self._pending_populate: Optional[Tuple[str, int, int]] = None
         self._last_populate_key: Optional[Tuple[str, int, int]] = None
+        self._populate_immediate_mode: bool = False
         self._pending_score_after_populate: bool = False
         self._pending_score_after_worker: bool = False
         self._auto_calc_suspended: int = 0
@@ -870,7 +873,7 @@ class MainWindow(QMainWindow):
         self.food_il_min.valueChanged.connect(self.refresh_food_combo)
         self.food_il_max.valueChanged.connect(self.refresh_food_combo)
 
-        gear_group = QGroupBox("装備セット編集（XIVGear風）")
+        gear_group = QGroupBox("装備セット編集")
         gear_group.setMinimumHeight(0)
         gear_layout = QGridLayout()
         self.slot_tables = {}
@@ -1048,6 +1051,14 @@ class MainWindow(QMainWindow):
         group = QGroupBox(title)
         layout = QVBoxLayout()
         header = QHBoxLayout()
+        chk_lock_item = QCheckBox("装備固定")
+        chk_lock_item.toggled.connect(lambda _checked, s=slot: self._on_slot_lock_toggled(s))
+        self.slot_lock_item_checks[slot] = chk_lock_item
+        header.addWidget(chk_lock_item)
+        chk_lock_materia = QCheckBox("マテリア固定")
+        chk_lock_materia.toggled.connect(lambda _checked, s=slot: self._on_slot_lock_toggled(s))
+        self.slot_lock_materia_checks[slot] = chk_lock_materia
+        header.addWidget(chk_lock_materia)
         header.addStretch(1)
         layout.addLayout(header)
         table = QTableWidget()
@@ -1223,6 +1234,74 @@ class MainWindow(QMainWindow):
         if hasattr(self, "chk_gear_search_mode"):
             return bool(self.chk_gear_search_mode.isChecked())
         return False
+
+    def _slot_item_lock_enabled(self, slot: str) -> bool:
+        checkbox = self.slot_lock_item_checks.get(slot)
+        return bool(checkbox and checkbox.isChecked())
+
+    def _slot_materia_lock_enabled(self, slot: str) -> bool:
+        checkbox = self.slot_lock_materia_checks.get(slot)
+        return bool(checkbox and checkbox.isChecked())
+
+    def _on_slot_lock_toggled(self, slot: str) -> None:
+        if self._applying_gearset or self._is_populating:
+            return
+        sel = self.current_gearset.items.get(slot) or ItemSelection()
+        sel.lock_item = self._slot_item_lock_enabled(slot)
+        sel.lock_materia = self._slot_materia_lock_enabled(slot)
+        self.current_gearset.items[slot] = sel
+        self._persist_current_gearset_to_selected_saved_set()
+        self.progress_label.setText(
+            f"{SLOT_LABELS.get(slot, slot)} の固定設定を更新しました"
+        )
+
+    def _persist_current_gearset_to_selected_saved_set(self) -> None:
+        if self._saved_sets_reordering or not hasattr(self, "saved_sets_table"):
+            return
+        row = self.saved_sets_table.currentRow()
+        if row < 0:
+            return
+        entry_item = self.saved_sets_table.item(row, SAVED_COL_NAME)
+        entry = entry_item.data(Qt.UserRole) if entry_item else None
+        if not isinstance(entry, dict) or bool(entry.get("locked", False)):
+            return
+        entry_id = entry.get("id")
+        if entry_id is None:
+            return
+        target = None
+        for saved in self.saved_sets:
+            if isinstance(saved, dict) and saved.get("id") == entry_id:
+                target = saved
+                break
+        if target is None:
+            return
+        gear_dict = self.current_gearset.to_dict()
+        if target.get("gearset") == gear_dict:
+            return
+        target["gearset"] = gear_dict
+        target["saved_at"] = datetime.now().isoformat(timespec="seconds")
+        entry.update(target)
+        if entry_item:
+            entry_item.setData(Qt.UserRole, entry)
+        self._schedule_saved_sets_flush(immediate=False)
+
+    def _show_materia_only_fixed_message(self) -> None:
+        QMessageBox.information(self, "固定不可", "マテリアのみ固定できません。")
+
+    def _validate_simulation_fixed_slots(self) -> bool:
+        for slot in GEAR_SLOTS:
+            sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
+            if bool(getattr(sel, "lock_materia", False)) and not bool(getattr(sel, "lock_item", False)):
+                self._show_materia_only_fixed_message()
+                return False
+            if bool(getattr(sel, "lock_item", False)) and not sel.item_id:
+                QMessageBox.warning(
+                    self,
+                    "未選択",
+                    f"{SLOT_LABELS.get(slot, slot)} を固定するには装備を選択してください。",
+                )
+                return False
+        return True
 
     def _crit_rate_adjust_percent(self) -> int:
         if hasattr(self, "crit_rate_adjust_spin"):
@@ -2029,123 +2108,141 @@ class MainWindow(QMainWindow):
             return
         self._ensure_saved_sets_jobs_loaded()
         selected_job = self.job_combo.currentData() if hasattr(self, "job_combo") else None
+        selected_entry_id = None
+        current_row = self.saved_sets_table.currentRow()
+        if current_row >= 0:
+            current_item = self.saved_sets_table.item(current_row, SAVED_COL_NAME)
+            current_entry = current_item.data(Qt.UserRole) if current_item else None
+            if isinstance(current_entry, dict):
+                selected_entry_id = current_entry.get("id")
         main_header = self._main_stat_header_for_job(selected_job) if selected_job else "MAIN"
         main_header_item = self.saved_sets_table.horizontalHeaderItem(SAVED_COL_MAIN)
         if main_header_item and main_header_item.text() != main_header:
             main_header_item.setText(main_header)
         self._updating_saved_table = True
-        self.saved_sets_table.setRowCount(0)
+        blocker = QSignalBlocker(self.saved_sets_table)
         pending_stats: List[dict] = []
-        for entry in self.saved_sets:
-            entry_job = entry.get("job")
-            entry_level = None
-            if not entry_job:
-                gear_data = entry.get("gearset") or {}
-                entry_job = gear_data.get("job")
-            else:
-                gear_data = entry.get("gearset") or {}
-            if isinstance(gear_data, dict):
-                try:
-                    entry_level = Gearset.from_dict(gear_data).level
-                except Exception:
-                    entry_level = None
-            if selected_job and entry_job and entry_job != selected_job:
-                continue
-            row = self.saved_sets_table.rowCount()
-            self.saved_sets_table.insertRow(row)
-            name = entry.get("name") or "セット"
-            mode = entry.get("mode") or "simdps"
-            score = entry.get("score")
-            expected_score = self._saved_expected_score_value(entry)
-            food_label = self._food_label_by_id(entry.get("food_id"))
-            stats = entry.get("stats")
-            if stats is not None and entry.get("stats_version") != STATS_VERSION:
-                stats = None
-            if stats is None:
-                job = entry.get("job")
-                if not job:
-                    gear_data = entry.get("gearset")
-                    if gear_data:
-                        job = gear_data.get("job")
-                if job and job not in self.items_by_job:
+        restored_row = -1
+        try:
+            self.saved_sets_table.setRowCount(0)
+            for entry in self.saved_sets:
+                entry_job = entry.get("job")
+                entry_level = None
+                if not entry_job:
+                    gear_data = entry.get("gearset") or {}
+                    entry_job = gear_data.get("job")
+                else:
+                    gear_data = entry.get("gearset") or {}
+                if isinstance(gear_data, dict):
+                    try:
+                        entry_level = Gearset.from_dict(gear_data).level
+                    except Exception:
+                        entry_level = None
+                if selected_job and entry_job and entry_job != selected_job:
+                    continue
+                row = self.saved_sets_table.rowCount()
+                self.saved_sets_table.insertRow(row)
+                name = entry.get("name") or "セット"
+                mode = entry.get("mode") or "simdps"
+                score = entry.get("score")
+                expected_score = self._saved_expected_score_value(entry)
+                food_label = self._food_label_by_id(entry.get("food_id"))
+                stats = entry.get("stats")
+                if stats is not None and entry.get("stats_version") != STATS_VERSION:
                     stats = None
-            if stats is None:
-                gear_data = entry.get("gearset")
-                if gear_data and self.jobs_data:
-                    gear = Gearset.from_dict(gear_data)
-                    if self._gearset_items_ready(gear):
-                        pending_stats.append(entry)
+                if stats is None:
+                    job = entry.get("job")
+                    if not job:
+                        gear_data = entry.get("gearset")
+                        if gear_data:
+                            job = gear_data.get("job")
+                    if job and job not in self.items_by_job:
+                        stats = None
+                if stats is None:
+                    gear_data = entry.get("gearset")
+                    if gear_data and self.jobs_data:
+                        gear = Gearset.from_dict(gear_data)
+                        if self._gearset_items_ready(gear):
+                            pending_stats.append(entry)
 
-            mode_label = "XiVGear（Dmg/100p）" if mode == "dmg100p" else "試算DPS（logs基準）"
-            score_label = self._format_saved_score(mode, score)
-            expected_score_label = self._format_saved_score(mode, expected_score)
-            gcd = self._saved_stats_gcd_value(stats, entry_job, entry_level)
-            if gcd is None:
-                gcd = entry.get("gcd")
-            gcd_label = f"{gcd:.3f}s" if gcd else "-"
-            wd_label = f"{stats.get('wd')}" if stats else "-"
-            hp_label = f"{stats.get('hp')}" if stats else "-"
-            main_stat_val = self._saved_stats_main_value(stats, entry_job)
-            main_stat_label = f"{main_stat_val}" if main_stat_val is not None else "-"
-            crit_label = f"{stats.get('crit')}" if stats else "-"
-            dhit_label = f"{stats.get('dhit')}" if stats else "-"
-            det_label = f"{stats.get('det')}" if stats else "-"
-            sps_label = f"{stats.get('sps')}" if stats else "-"
+                mode_label = "XiVGear（Dmg/100p）" if mode == "dmg100p" else "試算DPS（logs基準）"
+                score_label = self._format_saved_score(mode, score)
+                expected_score_label = self._format_saved_score(mode, expected_score)
+                gcd = self._saved_stats_gcd_value(stats, entry_job, entry_level)
+                if gcd is None:
+                    gcd = entry.get("gcd")
+                gcd_label = f"{gcd:.3f}s" if gcd else "-"
+                wd_label = f"{stats.get('wd')}" if stats else "-"
+                hp_label = f"{stats.get('hp')}" if stats else "-"
+                main_stat_val = self._saved_stats_main_value(stats, entry_job)
+                main_stat_label = f"{main_stat_val}" if main_stat_val is not None else "-"
+                crit_label = f"{stats.get('crit')}" if stats else "-"
+                dhit_label = f"{stats.get('dhit')}" if stats else "-"
+                det_label = f"{stats.get('det')}" if stats else "-"
+                sps_label = f"{stats.get('sps')}" if stats else "-"
 
-            handle_item = QTableWidgetItem("≡")
-            handle_item.setFlags(
-                Qt.ItemIsSelectable
-                | Qt.ItemIsEnabled
-                | Qt.ItemIsDragEnabled
-            )
-            handle_item.setTextAlignment(Qt.AlignCenter)
-            self.saved_sets_table.setItem(row, SAVED_COL_HANDLE, handle_item)
+                handle_item = QTableWidgetItem("≡")
+                handle_item.setFlags(
+                    Qt.ItemIsSelectable
+                    | Qt.ItemIsEnabled
+                    | Qt.ItemIsDragEnabled
+                )
+                handle_item.setTextAlignment(Qt.AlignCenter)
+                self.saved_sets_table.setItem(row, SAVED_COL_HANDLE, handle_item)
 
-            locked = bool(entry.get("locked", False))
-            lock_item = QTableWidgetItem("🔒" if locked else "🔓")
-            lock_item.setFlags(
-                Qt.ItemIsSelectable
-                | Qt.ItemIsEnabled
-            )
-            lock_item.setTextAlignment(Qt.AlignCenter)
-            self.saved_sets_table.setItem(row, SAVED_COL_LOCK, lock_item)
-
-            name_item = QTableWidgetItem(name)
-            name_item.setData(Qt.UserRole, entry)
-            name_item.setFlags(
-                Qt.ItemIsSelectable
-                | Qt.ItemIsEnabled
-                | Qt.ItemIsEditable
-            )
-            self.saved_sets_table.setItem(row, SAVED_COL_NAME, name_item)
-            for col, text in (
-                (SAVED_COL_MODE, mode_label),
-                (SAVED_COL_SCORE, score_label),
-                (SAVED_COL_EXPECTED_SCORE, expected_score_label),
-                (SAVED_COL_GCD, gcd_label),
-                (SAVED_COL_WD, wd_label),
-                (SAVED_COL_HP, hp_label),
-                (SAVED_COL_MAIN, main_stat_label),
-                (SAVED_COL_CRT, crit_label),
-                (SAVED_COL_DHT, dhit_label),
-                (SAVED_COL_DET, det_label),
-                (SAVED_COL_SPS, sps_label),
-                (SAVED_COL_FOOD, food_label),
-            ):
-                item = QTableWidgetItem(text)
-                item.setFlags(
+                locked = bool(entry.get("locked", False))
+                lock_item = QTableWidgetItem("🔒" if locked else "🔓")
+                lock_item.setFlags(
                     Qt.ItemIsSelectable
                     | Qt.ItemIsEnabled
                 )
-                self.saved_sets_table.setItem(row, col, item)
-        if not self._saved_table_sized_once:
-            self.saved_sets_table.setColumnWidth(SAVED_COL_HANDLE, 30)
-            self.saved_sets_table.setColumnWidth(SAVED_COL_LOCK, 56)
-            self.saved_sets_table.setColumnWidth(SAVED_COL_NAME, self._saved_set_name_col_width)
-            for col in range(SAVED_COL_MODE, self.saved_sets_table.columnCount()):
-                self.saved_sets_table.resizeColumnToContents(col)
-            self._saved_table_sized_once = True
-        self._updating_saved_table = False
+                lock_item.setTextAlignment(Qt.AlignCenter)
+                self.saved_sets_table.setItem(row, SAVED_COL_LOCK, lock_item)
+
+                name_item = QTableWidgetItem(name)
+                name_item.setData(Qt.UserRole, entry)
+                name_item.setFlags(
+                    Qt.ItemIsSelectable
+                    | Qt.ItemIsEnabled
+                    | Qt.ItemIsEditable
+                )
+                self.saved_sets_table.setItem(row, SAVED_COL_NAME, name_item)
+                if selected_entry_id is not None and entry.get("id") == selected_entry_id:
+                    restored_row = row
+                for col, text in (
+                    (SAVED_COL_MODE, mode_label),
+                    (SAVED_COL_SCORE, score_label),
+                    (SAVED_COL_EXPECTED_SCORE, expected_score_label),
+                    (SAVED_COL_GCD, gcd_label),
+                    (SAVED_COL_WD, wd_label),
+                    (SAVED_COL_HP, hp_label),
+                    (SAVED_COL_MAIN, main_stat_label),
+                    (SAVED_COL_CRT, crit_label),
+                    (SAVED_COL_DHT, dhit_label),
+                    (SAVED_COL_DET, det_label),
+                    (SAVED_COL_SPS, sps_label),
+                    (SAVED_COL_FOOD, food_label),
+                ):
+                    item = QTableWidgetItem(text)
+                    item.setFlags(
+                        Qt.ItemIsSelectable
+                        | Qt.ItemIsEnabled
+                    )
+                    self.saved_sets_table.setItem(row, col, item)
+            if restored_row >= 0:
+                self.saved_sets_table.setCurrentCell(restored_row, SAVED_COL_NAME)
+            else:
+                self.saved_sets_table.clearSelection()
+            if not self._saved_table_sized_once:
+                self.saved_sets_table.setColumnWidth(SAVED_COL_HANDLE, 30)
+                self.saved_sets_table.setColumnWidth(SAVED_COL_LOCK, 56)
+                self.saved_sets_table.setColumnWidth(SAVED_COL_NAME, self._saved_set_name_col_width)
+                for col in range(SAVED_COL_MODE, self.saved_sets_table.columnCount()):
+                    self.saved_sets_table.resizeColumnToContents(col)
+                self._saved_table_sized_once = True
+        finally:
+            del blocker
+            self._updating_saved_table = False
         if pending_stats and not self._saved_stats_worker_active:
             self._start_saved_stats_compute(pending_stats)
 
@@ -2698,7 +2795,7 @@ class MainWindow(QMainWindow):
         self._refresh_saved_sets_table()
 
     def on_saved_set_selected(self) -> None:
-        if self._saved_sets_reordering:
+        if self._saved_sets_reordering or self._updating_saved_table:
             return
         row = self.saved_sets_table.currentRow()
         if row < 0:
@@ -2915,12 +3012,16 @@ class MainWindow(QMainWindow):
         self.food_combo.blockSignals(True)
         self.race_clan_combo.blockSignals(True)
         self.party_bonus.blockSignals(True)
+        for checkbox in self.slot_lock_item_checks.values():
+            checkbox.blockSignals(True)
+        for checkbox in self.slot_lock_materia_checks.values():
+            checkbox.blockSignals(True)
         for table in self.slot_tables.values():
             table.blockSignals(True)
         try:
             if gear.job:
                 idx = self.job_combo.findData(gear.job)
-                if idx != -1:
+                if idx != -1 and self.job_combo.currentIndex() != idx:
                     self.job_combo.setCurrentIndex(idx)
                 if gear.job in self.items_by_job and self.base_params and self.item_levels:
                     self.cap_table = optimizer.build_cap_table(
@@ -2936,7 +3037,7 @@ class MainWindow(QMainWindow):
                         self._pending_saved_set_ui_context = refreshed_ui_context
                         self._persist_saved_set_ui_context(pending_entry, refreshed_ui_context)
                     self._apply_saved_set_ui_context(pending_ui_context, gear.job)
-                    self._ensure_il_filter_for_gearset(gear, pending_ui_context)
+                    self._ensure_il_filter_for_gearset(gear, pending_ui_context, immediate=True)
                     need_populate = gear.job != self._last_populated_job
                     if not need_populate:
                         for table in self.slot_tables.values():
@@ -2944,10 +3045,26 @@ class MainWindow(QMainWindow):
                                 need_populate = True
                                 break
                     if need_populate:
-                        self.populate_items(gear.job)
+                        self.populate_items(gear.job, immediate=True)
             self._set_race_clan(gear.race)
-            self.input_target_gcd.setValue(gear.target_gcd or 2.5)
-            self.note_edit.setPlainText(gear.note)
+            target_gcd = float(gear.target_gcd or 2.5)
+            if abs(float(self.input_target_gcd.value()) - target_gcd) > 0.0005:
+                self.input_target_gcd.setValue(target_gcd)
+            note_text = str(gear.note or "")
+            if self.note_edit.toPlainText() != note_text:
+                self.note_edit.setPlainText(note_text)
+            for slot in self.slot_tables.keys():
+                sel = (gear.items or {}).get(slot) or ItemSelection()
+                item_lock = self.slot_lock_item_checks.get(slot)
+                if item_lock is not None:
+                    desired_item_lock = bool(getattr(sel, "lock_item", False))
+                    if item_lock.isChecked() != desired_item_lock:
+                        item_lock.setChecked(desired_item_lock)
+                materia_lock = self.slot_lock_materia_checks.get(slot)
+                if materia_lock is not None:
+                    desired_materia_lock = bool(getattr(sel, "lock_materia", False))
+                    if materia_lock.isChecked() != desired_materia_lock:
+                        materia_lock.setChecked(desired_materia_lock)
             if not self._is_populating:
                 for slot, sel in gear.items.items():
                     table = self.slot_tables.get(slot)
@@ -2956,10 +3073,16 @@ class MainWindow(QMainWindow):
                     self._select_table_row(table, sel.item_id)
             self._ensure_food_combo_item(gear.food_id)
             idx = self.food_combo.findData(self._resolve_food_id(gear.food_id))
-            self.food_combo.setCurrentIndex(idx if idx != -1 else 0)
+            target_index = idx if idx != -1 else 0
+            if self.food_combo.currentIndex() != target_index:
+                self.food_combo.setCurrentIndex(target_index)
         finally:
             for table in self.slot_tables.values():
                 table.blockSignals(False)
+            for checkbox in self.slot_lock_materia_checks.values():
+                checkbox.blockSignals(False)
+            for checkbox in self.slot_lock_item_checks.values():
+                checkbox.blockSignals(False)
             self.party_bonus.blockSignals(False)
             self.race_clan_combo.blockSignals(False)
             self.food_combo.blockSignals(False)
@@ -5313,7 +5436,13 @@ class MainWindow(QMainWindow):
         self._last_selected_items[slot] = selected_id
         self._update_slot_materia_display(slot)
 
-    def _ensure_il_filter_for_gearset(self, gear: Gearset, ui_context: Optional[dict] = None) -> None:
+    def _ensure_il_filter_for_gearset(
+        self,
+        gear: Gearset,
+        ui_context: Optional[dict] = None,
+        *,
+        immediate: bool = False,
+    ) -> None:
         if not gear.job:
             return
         items = self.items_by_job.get(gear.job, [])
@@ -5348,7 +5477,7 @@ class MainWindow(QMainWindow):
         finally:
             self.item_il_min.blockSignals(False)
             self.item_il_max.blockSignals(False)
-        self.populate_items(gear.job)
+        self.populate_items(gear.job, immediate=immediate)
 
     def _refresh_slot_table_stats(self, slot: str) -> None:
         table = self.slot_tables.get(slot)
@@ -5714,7 +5843,7 @@ class MainWindow(QMainWindow):
             return high_rows + rows
         return rows
 
-    def populate_items(self, job: str) -> None:
+    def populate_items(self, job: str, immediate: bool = False) -> None:
         il_min = self.item_il_min.value()
         il_max = self.item_il_max.value()
         key = (job, il_min, il_max)
@@ -5726,6 +5855,7 @@ class MainWindow(QMainWindow):
             if all(table.rowCount() > 1 for table in self.slot_tables.values()):
                 return
         self._is_populating = True
+        self._populate_immediate_mode = bool(immediate)
         self._auto_calc_suspended += 1
         self._pending_populate = None
         self._last_populate_key = key
@@ -5823,11 +5953,16 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(0, lambda urls=visible_item_icon_urls: self._prefetch_item_icon_urls(urls))
             else:
                 QTimer.singleShot(0, lambda rows=items: self._prefetch_item_icons(rows))
-        QTimer.singleShot(0, self._populate_next_chunk)
+        if self._populate_immediate_mode:
+            while self._populate_queue:
+                self._populate_next_chunk()
+        else:
+            QTimer.singleShot(0, self._populate_next_chunk)
 
     def _populate_next_chunk(self) -> None:
         if not self._populate_queue:
             self._is_populating = False
+            self._populate_immediate_mode = False
             if self._auto_calc_suspended > 0:
                 self._auto_calc_suspended -= 1
             self._resize_populated_tables()
@@ -5852,7 +5987,7 @@ class MainWindow(QMainWindow):
                     self.item_il_min.blockSignals(False)
                     self.item_il_max.blockSignals(False)
                 self._pending_populate = None
-                self.populate_items(job)
+                self.populate_items(job, immediate=self._populate_immediate_mode)
             return
 
         entry = self._populate_queue[0]
@@ -5907,7 +6042,11 @@ class MainWindow(QMainWindow):
             table.setUpdatesEnabled(True)
             table.viewport().setUpdatesEnabled(True)
             self._populate_queue.pop(0)
-        QTimer.singleShot(0, self._populate_next_chunk)
+            if self._populate_immediate_mode and not self._populate_queue:
+                self._populate_next_chunk()
+                return
+        if not self._populate_immediate_mode:
+            QTimer.singleShot(0, self._populate_next_chunk)
 
     def _resize_populated_tables(self) -> None:
         if not self._tables_to_resize:
@@ -6164,12 +6303,14 @@ class MainWindow(QMainWindow):
     def _select_table_row(self, table: QTableWidget, item_id: Optional[int]) -> None:
         if item_id is None:
             if table.rowCount() > 0:
+                if table.currentRow() == 0 and self._is_table_row_visible(table, 0):
+                    return
                 table.setCurrentCell(0, 0)
                 # Keep the placeholder row selected, but reveal the first real option
                 # so wide IL ranges do not look empty.
                 if table.rowCount() > 1:
                     first_item = table.item(1, 0)
-                    if first_item is not None:
+                    if first_item is not None and not self._is_table_row_visible(table, 1):
                         table.scrollToItem(first_item, QAbstractItemView.PositionAtTop)
             return
         # fast path via row index
@@ -6178,14 +6319,42 @@ class MainWindow(QMainWindow):
                 row_map = self.slot_row_index.get(slot, {})
                 row = row_map.get(item_id)
                 if row is not None:
+                    current_row = table.currentRow()
+                    if current_row == row:
+                        current_cell = table.item(row, 0)
+                        if current_cell is not None and current_cell.data(Qt.UserRole) == item_id:
+                            return
+                    needs_scroll = not self._is_table_row_visible(table, row)
                     table.setCurrentCell(row, 0)
+                    target = table.item(row, 0)
+                    if target is not None and needs_scroll:
+                        table.scrollToItem(target, QAbstractItemView.PositionAtCenter)
                     return
                 break
         for row in range(table.rowCount()):
             cell = table.item(row, 0)
             if cell and cell.data(Qt.UserRole) == item_id:
+                if table.currentRow() == row:
+                    return
+                needs_scroll = not self._is_table_row_visible(table, row)
                 table.setCurrentCell(row, 0)
+                if needs_scroll:
+                    table.scrollToItem(cell, QAbstractItemView.PositionAtCenter)
                 return
+
+    def _is_table_row_visible(self, table: QTableWidget, row: int) -> bool:
+        if row < 0 or row >= table.rowCount():
+            return False
+        model = table.model()
+        if model is None:
+            return False
+        index = model.index(row, 0)
+        if not index.isValid():
+            return False
+        rect = table.visualRect(index)
+        if not rect.isValid() or rect.isEmpty():
+            return False
+        return table.viewport().rect().intersects(rect)
 
     def _table_has_item(self, table: QTableWidget, item_id: Optional[int]) -> bool:
         if item_id is None:
@@ -6332,6 +6501,15 @@ class MainWindow(QMainWindow):
         ]
         candidates: Dict[str, List[ItemRecord]] = {}
         for slot, source in slot_sources:
+            current_sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
+            if bool(getattr(current_sel, "lock_item", False)):
+                locked_item = self.items_by_id.get(int(current_sel.item_id or 0)) if current_sel.item_id else None
+                if locked_item is None:
+                    candidates[slot] = []
+                    continue
+                effective_item, _synced = self._apply_level_sync_to_item(locked_item, job)
+                candidates[slot] = [effective_item]
+                continue
             choices = filtered.get(source, [])
             try:
                 display_rows = self._compress_slot_items_for_display(choices, job, speed_stat, extra_stat)
@@ -6411,6 +6589,7 @@ class MainWindow(QMainWindow):
         current_target_gcd = self.current_gearset.target_gcd
         current_race = self.current_gearset.race
         current_food_id = self.current_gearset.food_id
+        active_items = self.current_gearset.items or {}
 
         def add_seed(gear: Optional[Gearset]) -> None:
             if not gear or gear.job != job:
@@ -6421,6 +6600,19 @@ class MainWindow(QMainWindow):
             cloned.target_gcd = current_target_gcd
             cloned.race = current_race
             cloned.food_id = current_food_id
+            for slot in GEAR_SLOTS:
+                active_sel = active_items.get(slot) or ItemSelection()
+                target_sel = (cloned.items or {}).get(slot) or ItemSelection()
+                target_sel.lock_item = bool(getattr(active_sel, "lock_item", False))
+                target_sel.lock_materia = bool(getattr(active_sel, "lock_materia", False))
+                if target_sel.lock_item:
+                    previous_item_id = target_sel.item_id
+                    target_sel.item_id = active_sel.item_id
+                    if target_sel.lock_materia:
+                        target_sel.materia = list(active_sel.materia or [])
+                    elif previous_item_id != active_sel.item_id:
+                        target_sel.materia = []
+                cloned.items[slot] = target_sel
             if not self._gearset_items_ready(cloned):
                 return
             if not self._gearset_within_candidate_pool(cloned, candidate_items_by_slot):
@@ -6455,6 +6647,56 @@ class MainWindow(QMainWindow):
                 continue
             add_seed(saved_gear)
         return seeds
+
+    def _gear_search_constrained_candidates(
+        self,
+        candidate_items_by_slot: Dict[str, List[ItemRecord]],
+        gear: Gearset,
+        fixed_slots: set[str],
+    ) -> Tuple[Dict[str, List[ItemRecord]], List[str]]:
+        constrained: Dict[str, List[ItemRecord]] = {}
+        missing: List[str] = []
+        for slot in GEAR_SLOTS:
+            if slot in fixed_slots:
+                sel = (gear.items or {}).get(slot)
+                if not sel or not sel.item_id:
+                    missing.append(slot)
+                    constrained[slot] = []
+                    continue
+                item = self.items_by_id.get(int(sel.item_id))
+                if item is None:
+                    missing.append(slot)
+                    constrained[slot] = []
+                    continue
+                effective_item, _synced = self._apply_level_sync_to_item(item, gear.job)
+                constrained[slot] = [effective_item]
+            else:
+                constrained[slot] = list(candidate_items_by_slot.get(slot) or [])
+        return constrained, missing
+
+    def _dedupe_optimized_results(
+        self,
+        results: List[Tuple[Gearset, float, float]],
+        limit: int = 3,
+    ) -> List[Tuple[Gearset, float, float]]:
+        deduped: List[Tuple[Gearset, float, float]] = []
+        seen = set()
+        for gs, score, gcd in sorted(results, key=lambda entry: (-float(entry[1]), float(entry[2]))):
+            key = tuple(
+                (
+                    slot,
+                    sel.item_id if sel else None,
+                    tuple((m.base_param, m.grade) for m in ((sel.materia or []) if sel else [])),
+                )
+                for slot, sel in sorted((gs.items or {}).items())
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append((gs, score, gcd))
+            if len(deduped) >= limit:
+                break
+        return deduped
 
     def refresh_food_combo(self) -> None:
         il_min = self.food_il_min.value()
@@ -6498,24 +6740,31 @@ class MainWindow(QMainWindow):
 
     def _sync_ui_to_gearset(self) -> None:
         for slot, table in self.slot_tables.items():
+            sel = self.current_gearset.items.get(slot) or ItemSelection()
+            sel.lock_item = self._slot_item_lock_enabled(slot)
+            sel.lock_materia = self._slot_materia_lock_enabled(slot)
             row = table.currentRow()
             if row < 0:
+                self.current_gearset.items[slot] = sel
                 continue
             item_cell = table.item(row, 0)
             if not item_cell:
+                self.current_gearset.items[slot] = sel
                 continue
             item_id = item_cell.data(Qt.UserRole)
-            sel = self.current_gearset.items.get(slot) or ItemSelection()
             if item_id is None and sel.item_id is not None:
                 # Avoid clearing selection when the UI row hasn't caught up yet.
+                self.current_gearset.items[slot] = sel
                 continue
             if sel.item_id is not None:
                 # Gearset is authoritative; only accept the table value when it matches.
                 # Manual changes are handled by on_slot_table_selected.
                 if not self._table_has_item(table, sel.item_id):
                     # Keep existing selection if the UI list is filtered out.
+                    self.current_gearset.items[slot] = sel
                     continue
                 if item_id != sel.item_id:
+                    self.current_gearset.items[slot] = sel
                     continue
             else:
                 sel.item_id = item_id
@@ -6650,6 +6899,9 @@ class MainWindow(QMainWindow):
             return
 
         self._sync_ui_to_gearset()
+        if not self._validate_simulation_fixed_slots():
+            self.progress_label.setText("固定条件が不正なためシミュレーションを実行しませんでした。")
+            return
         foods, food_for_baseline = self._resolve_optimize_food_candidates()
         if not foods:
             QMessageBox.warning(self, "食事なし", "条件に合う戦闘向け食事がありません。")
@@ -6718,6 +6970,12 @@ class MainWindow(QMainWindow):
             seed_candidates = self._gear_search_seed_candidates(job, gear_candidates)
 
             def task(progress=None, stop_event=None):
+                def _search_progress(pct: int, message: str) -> None:
+                    if not progress:
+                        return
+                    mapped = int((max(0, min(100, int(pct))) / 100.0) * 87)
+                    progress(mapped, message)
+
                 results = optimizer.search_gearsets(
                     self.current_gearset,
                     gear_candidates,
@@ -6735,14 +6993,66 @@ class MainWindow(QMainWindow):
                     baseline_food=baseline_food,
                     baseline_party_bonus=baseline_party,
                     baseline_race=baseline_race,
-                party_synergies=party_synergies,
-                **eval_rate_adjust_kwargs,
-                mode=mode,
+                    party_synergies=party_synergies,
+                    **eval_rate_adjust_kwargs,
+                    mode=mode,
                     allow_duplicate_unique_rings=self._allow_duplicate_unique_rings(),
-                    progress=progress,
+                    progress=_search_progress,
                     stop_event=stop_event,
+                    finalize_progress=False,
                 )
                 merged = list(results or [])
+                focus_slot_groups = [
+                    {"weapon", "offhand", "head", "body", "hands", "legs", "feet"},
+                    {"earrings", "necklace", "bracelet", "ring1", "ring2"},
+                ]
+                focused_seeds = list(merged[:2])
+                for base_index, (focused_gear, _focused_score, _focused_gcd) in enumerate(focused_seeds, 1):
+                    refined_gear = focused_gear
+                    for focus_index, fixed_slots in enumerate(focus_slot_groups, 1):
+                        if stop_event and stop_event.is_set():
+                            return []
+                        constrained_candidates, missing_focus = self._gear_search_constrained_candidates(
+                            gear_candidates,
+                            refined_gear,
+                            fixed_slots,
+                        )
+                        if missing_focus:
+                            continue
+                        focused_results = optimizer.search_gearsets(
+                            refined_gear,
+                            constrained_candidates,
+                            self.items_by_id,
+                            self.materia_catalog,
+                            foods,
+                            self.casts,
+                            fight_ms_eval,
+                            self.cap_table,
+                            damage_summary=self.damage_summary_self if mode == "simdps_self" else self.damage_summary,
+                            job_mods=self._get_job_mods(job),
+                            party_bonus=self.party_bonus.value(),
+                            baseline_raw_stats=baseline_raw_stats,
+                            baseline_items=baseline_items,
+                            baseline_food=baseline_food,
+                            baseline_party_bonus=baseline_party,
+                            baseline_race=baseline_race,
+                            party_synergies=party_synergies,
+                            **eval_rate_adjust_kwargs,
+                            mode=mode,
+                            allow_duplicate_unique_rings=self._allow_duplicate_unique_rings(),
+                            progress=None,
+                            stop_event=stop_event,
+                            finalize_progress=False,
+                        )
+                        if not focused_results:
+                            continue
+                        merged.extend(focused_results[:1])
+                        refined_gear = focused_results[0][0]
+                        if progress:
+                            progress(
+                                88 + min(6, base_index + focus_index),
+                                f"片側固定の再探索中 {base_index}-{focus_index}",
+                            )
                 for idx, (seed_gearset, seed_items, seed_no_meld) in enumerate(seed_candidates):
                     if stop_event and stop_event.is_set():
                         return []
@@ -6775,24 +7085,9 @@ class MainWindow(QMainWindow):
                         merged.extend(seed_results[:1])
                         if progress:
                             progress(95 + min(4, idx), f"既知装備を再評価中 {idx + 1}/{len(seed_candidates)}")
-                deduped = []
-                seen = set()
-                for gs, score, gcd in sorted(merged, key=lambda entry: (-float(entry[1]), float(entry[2]))):
-                    key = tuple(
-                        (
-                            slot,
-                            sel.item_id if sel else None,
-                            tuple((m.base_param, m.grade) for m in ((sel.materia or []) if sel else [])),
-                        )
-                        for slot, sel in sorted((gs.items or {}).items())
-                    )
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    deduped.append((gs, score, gcd))
-                    if len(deduped) >= 3:
-                        break
-                return deduped
+                if progress:
+                    progress(100, "装備検索を含む最適化が完了しました")
+                return self._dedupe_optimized_results(merged, limit=3)
 
             self.start_worker(task, self._after_optimize)
             return

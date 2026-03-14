@@ -1,11 +1,10 @@
 GearSimulator Release
-Version: 1.0.3
-Author: Ino
+Version: 1.0.5
 
 Folders:
-- py/GearSimulator : Python source distribution
-- exe/GearSimulator.exe : self-contained Windows executable distribution
+- py/GearSimulator : Python 版配布ファイル
+- exe/GearSimulator.exe : Windows 向け単体実行ファイル
 
-Personal data has been removed from the release config files.
-FFLogs private caches are not included.
-The exe creates config/cache folders automatically on first run if needed.
+起動方法:
+- exe 版は exe/GearSimulator.exe を直接起動してください。
+- Python 版は py/GearSimulator で依存関係を入れた後、run_gui.bat を実行してください。

@@ -387,7 +387,13 @@ def _clone_gearset_with_swapped_item(
     item_id: int,
 ) -> Gearset:
     items = dict(gearset.items or {})
-    items[slot_name] = ItemSelection(item_id=item_id, materia=[])
+    existing = items.get(slot_name)
+    items[slot_name] = ItemSelection(
+        item_id=item_id,
+        materia=[],
+        lock_item=bool(getattr(existing, "lock_item", False)),
+        lock_materia=bool(getattr(existing, "lock_materia", False)),
+    )
     return Gearset(
         job=gearset.job,
         items=items,
@@ -406,6 +412,14 @@ def _reconstruct_exact_meld_map(node: Optional[ExactStateNode]) -> Dict[str, Lis
         meld_map[current.slot] = list(current.melds)
         current = current.parent
     return meld_map
+
+
+def _selection_lock_item(selection: Optional[ItemSelection]) -> bool:
+    return bool(getattr(selection, "lock_item", False))
+
+
+def _selection_lock_materia(selection: Optional[ItemSelection]) -> bool:
+    return bool(getattr(selection, "lock_materia", False))
 
 
 def _gear_search_item_score(
@@ -2185,6 +2199,13 @@ def optimize(
             selected_items[slot] = item
     base_stats = aggregate_base_stats(selected_items)
     speed_stat_id = 46 if (gearset.job or "") in SPELL_SPEED_JOBS else 45
+    fixed_materia_slots: Dict[str, List[MateriaSlotSelection]] = {}
+    for slot, selection in (gearset.items or {}).items():
+        if slot not in selected_items:
+            continue
+        if not (_selection_lock_item(selection) and _selection_lock_materia(selection)):
+            continue
+        fixed_materia_slots[slot] = list(selection.materia or [])
     total_meld_slots_cache: Dict[int, int] = {}
     meld_stats_cache: Dict[Tuple[int, Tuple[Tuple[int, int], ...]], Dict[int, int]] = {}
 
@@ -2331,6 +2352,14 @@ def optimize(
                 pct = int(((idx + 1) / max(1, total_slots)) * 25)
                 slot_label = SLOT_LABELS.get(slot, slot)
                 progress(pct, f"{slot_label} はレベルシンクでマテリア無効")
+            continue
+        if slot in fixed_materia_slots:
+            fixed_melds = list(fixed_materia_slots.get(slot) or [])
+            per_slot_combos[slot] = [(_meld_stats_for_item_cached(item, fixed_melds), fixed_melds, 0.0)]
+            if progress:
+                pct = int(((idx + 1) / max(1, total_slots)) * 25)
+                slot_label = SLOT_LABELS.get(slot, slot)
+                progress(pct, f"{slot_label} は固定マテリアを使用")
             continue
         combos = generate_meld_combos(
             item,
@@ -3377,6 +3406,8 @@ def optimize(
                 for slot, item in selected_items.items():
                     if no_meld_slots and slot in no_meld_slots:
                         continue
+                    if slot in fixed_materia_slots:
+                        continue
                     combos = _refine_slot_combos(slot, item)
                     base_without = total_stats.copy()
                     _stats_add(base_without, slot_stats.get(slot, {}), -1)
@@ -3528,6 +3559,7 @@ def search_gearsets(
     progress: Optional[Callable[[int, str], None]] = None,
     stop_event=None,
     allow_duplicate_unique_rings: bool = False,
+    finalize_progress: bool = True,
 ) -> List[Tuple[Gearset, float, float]]:
     job = gearset.job or ""
     if not job:
@@ -3849,7 +3881,16 @@ def search_gearsets(
         candidate_items = {slot: ItemSelection() for slot in GEAR_SLOTS}
         no_meld_slots_local: set = set()
         for slot, item in selected_items_local.items():
-            candidate_items[slot] = ItemSelection(item_id=int(item.item_id), materia=[])
+            template_sel = (gearset.items or {}).get(slot)
+            initial_materia = []
+            if _selection_lock_item(template_sel) and _selection_lock_materia(template_sel):
+                initial_materia = list(template_sel.materia or [])
+            candidate_items[slot] = ItemSelection(
+                item_id=int(item.item_id),
+                materia=initial_materia,
+                lock_item=_selection_lock_item(template_sel),
+                lock_materia=_selection_lock_materia(template_sel),
+            )
             if _total_meld_slots_cached(item) <= 0:
                 no_meld_slots_local.add(slot)
         candidate_gearset = Gearset(
@@ -4013,6 +4054,7 @@ def search_gearsets(
                 "offhand",
             ]
             if len(candidate_items_by_slot.get(slot) or []) > 1
+            and not _selection_lock_item((gearset.items or {}).get(slot))
         ]
         refine_result_limit = min(len(results), 2)
         refine_iterations = 2
@@ -4106,7 +4148,7 @@ def search_gearsets(
                 deduped_results.append((gs, score, gcd))
             results = deduped_results
 
-    if progress:
+    if progress and finalize_progress:
         progress(100, "装備検索を含む最適化が完了しました")
     sim_log(
         f"[gear-search] done slots={len(slot_order)} shortlist={len(shortlist)} results={len(results)}"
@@ -4116,4 +4158,9 @@ def search_gearsets(
 
 def MateriaAwareSelection(selection, melds: List[MateriaSlotSelection]):
     # helper to clone ItemSelection while replacing materia list
-    return type(selection)(item_id=selection.item_id, materia=list(melds))
+    return type(selection)(
+        item_id=selection.item_id,
+        materia=list(melds),
+        lock_item=bool(getattr(selection, "lock_item", False)),
+        lock_materia=bool(getattr(selection, "lock_materia", False)),
+    )
