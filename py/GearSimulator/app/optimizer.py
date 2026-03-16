@@ -22,7 +22,7 @@ from .models import (
     SPELL_SPEED_JOBS,
 )
 from . import xivmath
-from .utils import sim_log
+from .utils import sim_log, sim_debug_enabled
 
 # Stats that can be melded.
 MELDABLE_STATS = {6, 19, 22, 27, 44, 45, 46}
@@ -393,6 +393,7 @@ def _clone_gearset_with_swapped_item(
         materia=[],
         lock_item=bool(getattr(existing, "lock_item", False)),
         lock_materia=bool(getattr(existing, "lock_materia", False)),
+        excluded_item_ids=list(getattr(existing, "excluded_item_ids", []) or []),
     )
     return Gearset(
         job=gearset.job,
@@ -2169,9 +2170,9 @@ def optimize(
     progress: Optional[Callable[[int, str], None]] = None,
     stop_event=None,
     beam_width: int = 40,
-    allow_duplicate_unique_rings: bool = False,
     shortlist_parallel_workers: Optional[int] = None,
 ) -> List[Tuple[Gearset, float, float]]:
+    debug_enabled = sim_debug_enabled()
     # Validate selected items
     level_value = gearset_level(gearset)
     if selected_items_override is not None:
@@ -2185,16 +2186,10 @@ def optimize(
             item = items_by_id.get(selection.item_id)
             if not item:
                 continue
-            duplicate_unique_ring = (
-                allow_duplicate_unique_rings
-                and slot in {"ring1", "ring2"}
-                and str(getattr(item, "slot", "")) == "ring"
-                and bool(getattr(item, "unique", False))
-            )
-            if item.unique and item.item_id in seen_unique and not duplicate_unique_ring:
+            if item.unique and item.item_id in seen_unique:
                 # duplicate unique item; skip this slot
                 continue
-            if item.unique and not duplicate_unique_ring:
+            if item.unique:
                 seen_unique[item.item_id] = True
             selected_items[slot] = item
     base_stats = aggregate_base_stats(selected_items)
@@ -2333,12 +2328,13 @@ def optimize(
                 food_limit = max(food_limit, 180)
                 beam_width = max(beam_width, 960)
 
-    sim_log(
-        "[opt] start "
-        f"mode={mode} job={gearset.job} slots={len(selected_items)} target_gcd={gearset.target_gcd} "
-        "profile=high_precision "
-        f"beam_width={beam_width} per_item_limit={per_item_limit} candidate_limit={candidate_limit} food_limit={food_limit}"
-    )
+    if debug_enabled:
+        sim_log(
+            "[opt] start "
+            f"mode={mode} job={gearset.job} slots={len(selected_items)} target_gcd={gearset.target_gcd} "
+            "profile=high_precision "
+            f"beam_width={beam_width} per_item_limit={per_item_limit} candidate_limit={candidate_limit} food_limit={food_limit}"
+        )
 
     per_slot_combos: Dict[str, List[Tuple[Dict[int, int], List[MateriaSlotSelection], float]]] = {}
     slots_to_process = list(selected_items.items())
@@ -2376,10 +2372,11 @@ def optimize(
             base_stats_for_score=base_stats,
         )
         per_slot_combos[slot] = combos
-        sim_log(
-            f"[opt] slot_candidates slot={slot} item={item.item_id} combos={len(combos)} "
-            f"no_meld={bool(no_meld_slots and slot in no_meld_slots)}"
-        )
+        if debug_enabled:
+            sim_log(
+                f"[opt] slot_candidates slot={slot} item={item.item_id} combos={len(combos)} "
+                f"no_meld={bool(no_meld_slots and slot in no_meld_slots)}"
+            )
         if progress:
             pct = int(((idx + 1) / max(1, total_slots)) * 25)
             slot_label = SLOT_LABELS.get(slot, slot)
@@ -2394,7 +2391,8 @@ def optimize(
         # High precision simdps: prefer exact DP by stat-vector to avoid
         # beam-pruning misses on near-tie DET/CRT/DH distributions.
         exact_mode_requested = True
-        sim_log("[opt] exact_mode requested reason=high_precision_simdps")
+        if debug_enabled:
+            sim_log("[opt] exact_mode requested reason=high_precision_simdps")
 
     # Candidate foods: combat foods only, searched from highest item level.
     combat_foods = [f for f in foods if is_combat_food(f)]
@@ -2413,10 +2411,11 @@ def optimize(
     candidate_foods.sort(key=lambda f: (-(f.level_item or 0), int(f.food_id or 0)))
     candidate_foods = candidate_foods[:food_limit]
     foods_by_id = {f.food_id: f for f in foods}
-    sim_log(
-        f"[opt] food_candidates combat={len(combat_foods)} relevant={len(candidate_foods)} "
-        f"speed_stat_id={speed_stat_id}"
-    )
+    if debug_enabled:
+        sim_log(
+            f"[opt] food_candidates combat={len(combat_foods)} relevant={len(candidate_foods)} "
+            f"speed_stat_id={speed_stat_id}"
+        )
 
     level_base_sub = int(level_stats(level_value).base_sub)
     base_speed_raw = int(base_stats.get(speed_stat_id, 0))
@@ -2454,10 +2453,11 @@ def optimize(
         base_speed_stat = base_speed_raw + _max_food_speed_bonus(base_speed_raw) + level_base_sub
         if base_speed_stat >= required_speed_stat:
             strict_gcd_mode = False
-            sim_log(
-                f"[opt] strict_gcd disabled reason=already_satisfied "
-                f"required_speed={required_speed_stat} base_speed_stat={base_speed_stat}"
-            )
+            if debug_enabled:
+                sim_log(
+                    f"[opt] strict_gcd disabled reason=already_satisfied "
+                    f"required_speed={required_speed_stat} base_speed_stat={base_speed_stat}"
+                )
 
     slot_max_speed: List[int] = []
     for slot, _item in slots_to_process:
@@ -2473,17 +2473,19 @@ def optimize(
         max_raw_speed = base_speed_raw + remaining_max_speed[0]
         max_speed_stat = max_raw_speed + _max_food_speed_bonus(max_raw_speed) + level_base_sub
         if max_speed_stat < required_speed_stat:
-            sim_log(
-                f"[opt] strict_gcd_unreachable required_speed={required_speed_stat} max_speed={max_speed_stat} "
-                f"base_speed={base_speed_raw} remaining_max_speed={remaining_max_speed[0]}"
-            )
+            if debug_enabled:
+                sim_log(
+                    f"[opt] strict_gcd_unreachable required_speed={required_speed_stat} max_speed={max_speed_stat} "
+                    f"base_speed={base_speed_raw} remaining_max_speed={remaining_max_speed[0]}"
+                )
             if progress:
                 progress(100, "目標GCDを満たす速度が不足しています")
             return []
-        sim_log(
-            f"[opt] strict_gcd enabled required_speed={required_speed_stat} "
-            f"base_speed={base_speed_raw} max_speed={max_speed_stat}"
-        )
+        if debug_enabled:
+            sim_log(
+                f"[opt] strict_gcd enabled required_speed={required_speed_stat} "
+                f"base_speed={base_speed_raw} max_speed={max_speed_stat}"
+            )
 
     # Reuse score evaluations across beam, food, and local refinement loops.
     # Keyed by combat-relevant stats + food id for the current optimize call context.
@@ -2680,7 +2682,8 @@ def optimize(
         zero_stats_key = tuple(0 for _ in range(exact_stat_tuple_len))
         speed_stat_tuple_index = relevant_stat_index.get(speed_stat_id, -1)
         exact_states = {zero_stats_key: None}
-        sim_log("[opt] exact_mode enabled")
+        if debug_enabled:
+            sim_log("[opt] exact_mode enabled")
         exact_state_limit = 600000 if mode in {"simdps", "simdps_self"} else 1200000
 
         for slot_idx, (slot, _item) in enumerate(slots_to_process):
@@ -2727,23 +2730,26 @@ def optimize(
                             break
                 if limit_hit:
                     break
-            sim_log(
-                f"[opt] exact_stage slot={slot} base_states={before_count} combos={len(combos)} "
-                f"after_states={len(new_map)}"
-            )
+            if debug_enabled:
+                sim_log(
+                    f"[opt] exact_stage slot={slot} base_states={before_count} combos={len(combos)} "
+                    f"after_states={len(new_map)}"
+                )
             exact_states = new_map
             if exact_mode_fallback:
-                sim_log(
-                    f"[opt] exact_mode_fallback reason=state_limit_exceeded "
-                    f"limit={exact_state_limit} current={len(exact_states)}"
-                )
+                if debug_enabled:
+                    sim_log(
+                        f"[opt] exact_mode_fallback reason=state_limit_exceeded "
+                        f"limit={exact_state_limit} current={len(exact_states)}"
+                    )
                 break
             if progress:
                 pct = 25 + int(((slot_idx + 1) / max(1, total_slots)) * 25)
                 progress(min(50, pct), "マテリアセットを組み合わせ中")
 
         if not exact_mode_fallback:
-            sim_log(f"[opt] exact_food_eval states={len(exact_states)} foods={len(candidate_foods)}")
+            if debug_enabled:
+                sim_log(f"[opt] exact_food_eval states={len(exact_states)} foods={len(candidate_foods)}")
             exact_state_count = len(exact_states)
             exact_candidates: Optional[
                 List[Tuple[int, Tuple[int, ...], Optional[ExactStateNode]]]
@@ -2935,11 +2941,12 @@ def optimize(
                         adaptive_fallback_candidates.append((_seq, stats_key_tuple, meld_node))
                         if len(exact_candidates) + len(adaptive_fallback_candidates) >= fallback_shortlist_limit:
                             break
-                sim_log(
-                    f"[opt] exact_shortlist total_states={exact_state_count} "
-                    f"scored={scored_count} shortlisted={len(exact_candidates)} "
-                    f"per_mix={shortlist_per_mix}"
-                )
+                if debug_enabled:
+                    sim_log(
+                        f"[opt] exact_shortlist total_states={exact_state_count} "
+                        f"scored={scored_count} shortlisted={len(exact_candidates)} "
+                        f"per_mix={shortlist_per_mix}"
+                    )
 
             exact_evaluated = 0
             exact_kept = 0
@@ -3036,12 +3043,13 @@ def optimize(
                 if len(distinct_scores) >= 2:
                     score_gap = float(distinct_scores[0] - distinct_scores[1])
                 should_expand = score_gap <= adaptive_gap_threshold
-                sim_log(
-                    f"[opt] exact_shortlist_adaptive gap={score_gap:.4f} "
-                    f"threshold={adaptive_gap_threshold:.4f} "
-                    f"expand={'yes' if should_expand else 'no'} "
-                    f"extra_pool={len(adaptive_fallback_candidates)}"
-                )
+                if debug_enabled:
+                    sim_log(
+                        f"[opt] exact_shortlist_adaptive gap={score_gap:.4f} "
+                        f"threshold={adaptive_gap_threshold:.4f} "
+                        f"expand={'yes' if should_expand else 'no'} "
+                        f"extra_pool={len(adaptive_fallback_candidates)}"
+                    )
                 if should_expand:
                     extra_evaluated = 0
                     extra_kept = 0
@@ -3079,23 +3087,26 @@ def optimize(
                         if progress:
                             pct = 95 + int((extra_idx / max(1, len(adaptive_fallback_candidates))) * 4)
                             progress(min(99, pct), "上位候補を追加評価中")
-                    sim_log(
-                        f"[opt] exact_shortlist_adaptive_done extra_evaluated={extra_evaluated} "
-                        f"extra_accepted={extra_kept}"
-                    )
+                    if debug_enabled:
+                        sim_log(
+                            f"[opt] exact_shortlist_adaptive_done extra_evaluated={extra_evaluated} "
+                            f"extra_accepted={extra_kept}"
+                        )
             if exact_heap:
                 exact_sorted = sorted(exact_heap, key=lambda x: (x[0], x[1]), reverse=True)
                 results.extend((gs, score, gcd) for score, _chg, _i, gs, gcd in exact_sorted)
-            sim_log(
-                f"[opt] exact_food_eval_done evaluated={exact_evaluated} accepted={exact_kept} "
-                f"kept_top={len(exact_heap)}"
-            )
+            if debug_enabled:
+                sim_log(
+                    f"[opt] exact_food_eval_done evaluated={exact_evaluated} accepted={exact_kept} "
+                    f"kept_top={len(exact_heap)}"
+                )
     if not exact_mode_requested or exact_mode_fallback:
         # Beam search across slots
         beam: List[Tuple[Dict[int, int], Dict[str, List[MateriaSlotSelection]], float]] = [
             ({}, {}, 0.0)
         ]
-        sim_log(f"[opt] beam_mode start beam_states={len(beam)}")
+        if debug_enabled:
+            sim_log(f"[opt] beam_mode start beam_states={len(beam)}")
 
         def _state_mix_signature(
             state: Tuple[Dict[int, int], Dict[str, List[MateriaSlotSelection]], float]
@@ -3166,10 +3177,11 @@ def optimize(
                 new_beam = feasible_beam
                 if not new_beam:
                     beam = []
-                    sim_log(
-                        f"[opt] beam_stage slot={slot} combos={len(combos)} pre={pre_prune_count} "
-                        "post=0 strict_gcd_pruned_all=true"
-                    )
+                    if debug_enabled:
+                        sim_log(
+                            f"[opt] beam_stage slot={slot} combos={len(combos)} pre={pre_prune_count} "
+                            "post=0 strict_gcd_pruned_all=true"
+                        )
                     break
 
                 # Keep diversity by speed tier so target-GCD candidates are not pruned early.
@@ -3196,10 +3208,11 @@ def optimize(
 
                 compact.sort(key=_beam_rank)
                 beam = _select_diverse(compact, beam_width, _beam_rank)
-                sim_log(
-                    f"[opt] beam_stage slot={slot} combos={len(combos)} pre={pre_prune_count} "
-                    f"feasible={len(new_beam)} compact={len(compact)} post={len(beam)} strict_gcd=true"
-                )
+                if debug_enabled:
+                    sim_log(
+                        f"[opt] beam_stage slot={slot} combos={len(combos)} pre={pre_prune_count} "
+                        f"feasible={len(new_beam)} compact={len(compact)} post={len(beam)} strict_gcd=true"
+                    )
             else:
                 # keep top beam_width by estimated score
                 beam = _select_diverse(
@@ -3207,10 +3220,11 @@ def optimize(
                     beam_width,
                     rank_key=lambda x: (-x[2],),
                 )
-                sim_log(
-                    f"[opt] beam_stage slot={slot} combos={len(combos)} pre={pre_prune_count} "
-                    f"post={len(beam)} strict_gcd=false"
-                )
+                if debug_enabled:
+                    sim_log(
+                        f"[opt] beam_stage slot={slot} combos={len(combos)} pre={pre_prune_count} "
+                        f"post={len(beam)} strict_gcd=false"
+                    )
             if progress:
                 pct = 25 + int(((slot_idx + 1) / max(1, total_slots)) * 25)
                 progress(min(50, pct), "マテリアセットを組み合わせ中")
@@ -3231,10 +3245,11 @@ def optimize(
                 if not gcd_meets_target(coarse_gcd, gearset.target_gcd):
                     continue
                 coarse_pool.append((coarse_score, combined_stats, meld_map, food))
-        sim_log(
-            f"[opt] coarse_pool beam_states={len(beam)} foods={len(candidate_foods)} "
-            f"coarse_candidates={len(coarse_pool)}"
-        )
+        if debug_enabled:
+            sim_log(
+                f"[opt] coarse_pool beam_states={len(beam)} foods={len(candidate_foods)} "
+                f"coarse_candidates={len(coarse_pool)}"
+            )
 
         if coarse_pool:
             # Stage-1/2:
@@ -3299,9 +3314,10 @@ def optimize(
                     if progress:
                         pct = 50 + int((idx + 1) / max(1, len(shortlisted)) * 45)
                         progress(pct, "食事ごとに評価中")
-            sim_log(
-                f"[opt] strict_eval_done evaluated={strict_evaluated} accepted={strict_kept}"
-            )
+            if debug_enabled:
+                sim_log(
+                    f"[opt] strict_eval_done evaluated={strict_evaluated} accepted={strict_kept}"
+                )
 
     # Safety net: always include the current meld/food as a valid candidate.
     # This guarantees optimization won't regress below the starting setup.
@@ -3324,9 +3340,10 @@ def optimize(
             current_score,
             current_gcd,
         ))
-        sim_log(f"[opt] baseline_candidate score={current_score:.4f} gcd={current_gcd:.3f}")
+        if debug_enabled:
+            sim_log(f"[opt] baseline_candidate score={current_score:.4f} gcd={current_gcd:.3f}")
 
-    # pick top 3 (dedupe identical gearsets)
+    # keep multiple equivalent best variants available for the UI
     results.sort(key=_result_sort_key)
 
     if (
@@ -3453,18 +3470,20 @@ def optimize(
             return gs, score, gcd
 
         refine_limit = min(5 if mode == "dmg100p" else 12, len(results))
-        sim_log(
-            f"[opt] refine_start mode={mode} refine_limit={refine_limit} "
-            f"refine_slot_limit={refine_slot_limit} refine_candidate_limit={refine_candidate_limit}"
-        )
+        if debug_enabled:
+            sim_log(
+                f"[opt] refine_start mode={mode} refine_limit={refine_limit} "
+                f"refine_slot_limit={refine_slot_limit} refine_candidate_limit={refine_candidate_limit}"
+            )
         for idx in range(refine_limit):
             gs, score, gcd = results[idx]
             results[idx] = _refine_single(gs, score, gcd)
             if results[idx][1] > score + 1e-6:
-                sim_log(
-                    f"[opt] refine_improved index={idx} score={score:.4f}->{results[idx][1]:.4f} "
-                    f"gcd={gcd:.3f}->{results[idx][2]:.3f}"
-                )
+                if debug_enabled:
+                    sim_log(
+                        f"[opt] refine_improved index={idx} score={score:.4f}->{results[idx][1]:.4f} "
+                        f"gcd={gcd:.3f}->{results[idx][2]:.3f}"
+                    )
         results.sort(key=_result_sort_key)
 
     if results:
@@ -3499,10 +3518,11 @@ def optimize(
         if final_checked > 0:
             results = verified_head + results[cursor:]
             results.sort(key=_result_sort_key)
-        sim_log(
-            f"[opt] final_check checked={final_checked} accepted={len(verified_head)} "
-            f"dropped={final_dropped} limit={final_check_limit}"
-        )
+        if debug_enabled:
+            sim_log(
+                f"[opt] final_check checked={final_checked} accepted={len(verified_head)} "
+                f"dropped={final_dropped} limit={final_check_limit}"
+            )
 
     def gearset_key(gs: Gearset) -> Tuple:
         slots = sorted(gs.items.keys())
@@ -3524,11 +3544,12 @@ def optimize(
             continue
         seen.add(key)
         top_results.append((gs, score, gcd))
-        if len(top_results) >= 3:
+        if len(top_results) >= 8:
             break
-    sim_log(
-        f"[opt] done raw_results={len(results)} deduped={len(top_results)} cache_entries={len(eval_cache)}"
-    )
+    if debug_enabled:
+        sim_log(
+            f"[opt] done raw_results={len(results)} deduped={len(top_results)} cache_entries={len(eval_cache)}"
+        )
     if progress:
         progress(100, "最適化完了")
     return top_results
@@ -3558,9 +3579,9 @@ def search_gearsets(
     dhit_rate_offset: float = 0.0,
     progress: Optional[Callable[[int, str], None]] = None,
     stop_event=None,
-    allow_duplicate_unique_rings: bool = False,
     finalize_progress: bool = True,
 ) -> List[Tuple[Gearset, float, float]]:
+    debug_enabled = sim_debug_enabled()
     job = gearset.job or ""
     if not job:
         return []
@@ -3658,10 +3679,11 @@ def search_gearsets(
         candidate_item_lookup_by_slot[slot] = {
             int(item.item_id): item for item in pruned if item is not None
         }
-        sim_log(
-            f"[gear-search] slot={slot} raw={len(candidates)} pruned={len(pruned)} "
-            f"beam_width={beam_width} shortlist_limit={shortlist_limit}"
-        )
+        if debug_enabled:
+            sim_log(
+                f"[gear-search] slot={slot} raw={len(candidates)} pruned={len(pruned)} "
+                f"beam_width={beam_width} shortlist_limit={shortlist_limit}"
+            )
 
     beam: List[Dict[str, object]] = [
         {
@@ -3686,7 +3708,7 @@ def search_gearsets(
             current_meld_capacity = int(state.get("meld_capacity") or 0)
             current_weapon_damage = int(state.get("weapon_damage") or 0)
             for item in slot_candidates:
-                if slot in {"ring1", "ring2"} and item.unique and not allow_duplicate_unique_rings:
+                if slot in {"ring1", "ring2"} and item.unique:
                     other_slot = "ring1" if slot == "ring2" else "ring2"
                     other_item = selected.get(other_slot)
                     if other_item and int(getattr(other_item, "item_id", 0) or 0) == int(item.item_id):
@@ -3859,6 +3881,9 @@ def search_gearsets(
     results_by_key: Dict[Tuple, Tuple[Gearset, float, float]] = {}
     total_candidates = len(shortlist)
     candidate_parallel_workers = max(1, min(4, int(os.cpu_count() or 4)))
+    optimize_result_cache: Dict[Tuple, Optional[Tuple[Gearset, float, float]]] = {}
+    optimize_result_cache_lock = Lock()
+    _cache_miss = object()
 
     def _result_key_for_best(best: Tuple[Gearset, float, float]) -> Tuple:
         key_slots = []
@@ -3867,6 +3892,71 @@ def search_gearsets(
             mats = tuple((m.base_param, m.grade) for m in (sel.materia or [])) if sel else tuple()
             key_slots.append((slot_name, sel.item_id if sel else None, mats))
         return (best[0].food_id, tuple(key_slots))
+
+    def _optimize_cache_key(gs: Gearset) -> Tuple:
+        key_slots = []
+        for slot_name in GEAR_SLOTS:
+            sel = (gs.items or {}).get(slot_name)
+            mats = tuple((m.base_param, m.grade) for m in (sel.materia or [])) if sel else tuple()
+            key_slots.append(
+                (
+                    slot_name,
+                    sel.item_id if sel else None,
+                    mats,
+                    bool(getattr(sel, "lock_item", False)) if sel else False,
+                    bool(getattr(sel, "lock_materia", False)) if sel else False,
+                )
+            )
+        return (
+            gs.job,
+            gs.food_id,
+            float(gs.target_gcd or 0.0),
+            int(gs.level or 0),
+            tuple(key_slots),
+        )
+
+    def _run_optimize_cached(
+        candidate_gearset: Gearset,
+        selected_items_override: Dict[str, ItemRecord],
+        no_meld_slots_override: set,
+        nested_progress: Optional[Callable[[int, str], None]],
+    ) -> Optional[Tuple[Gearset, float, float]]:
+        cache_key = _optimize_cache_key(candidate_gearset)
+        with optimize_result_cache_lock:
+            cached = optimize_result_cache.get(cache_key, _cache_miss)
+        if cached is not _cache_miss:
+            return cached
+        opt_results = optimize(
+            candidate_gearset,
+            items_by_id,
+            materia_catalog,
+            foods,
+            casts,
+            fight_duration_ms,
+            cap_table,
+            damage_summary=damage_summary,
+            baseline_raw_stats=baseline_raw_stats,
+            baseline_items=baseline_items,
+            baseline_gcd=None,
+            job_mods=job_mods,
+            baseline_food=baseline_food,
+            party_bonus=party_bonus,
+            baseline_party_bonus=baseline_party_bonus,
+            mode=mode,
+            baseline_race=baseline_race,
+            party_synergies=party_synergies,
+            crit_rate_offset=crit_rate_offset,
+            dhit_rate_offset=dhit_rate_offset,
+            selected_items_override=selected_items_override,
+            no_meld_slots=no_meld_slots_override,
+            progress=nested_progress,
+            stop_event=stop_event,
+            shortlist_parallel_workers=1,
+        )
+        best = opt_results[0] if opt_results else None
+        with optimize_result_cache_lock:
+            optimize_result_cache.setdefault(cache_key, best)
+        return best
 
     def _optimize_search_candidate(
         index: int,
@@ -3890,6 +3980,7 @@ def search_gearsets(
                 materia=initial_materia,
                 lock_item=_selection_lock_item(template_sel),
                 lock_materia=_selection_lock_materia(template_sel),
+                excluded_item_ids=list(getattr(template_sel, "excluded_item_ids", []) or []),
             )
             if _total_meld_slots_cached(item) <= 0:
                 no_meld_slots_local.add(slot)
@@ -3902,44 +3993,23 @@ def search_gearsets(
             race=gearset.race,
             level=level_value,
         )
-        opt_results = optimize(
+        best = _run_optimize_cached(
             candidate_gearset,
-            items_by_id,
-            materia_catalog,
-            foods,
-            casts,
-            fight_duration_ms,
-            cap_table,
-            damage_summary=damage_summary,
-            baseline_raw_stats=baseline_raw_stats,
-            baseline_items=baseline_items,
-            baseline_gcd=None,
-            job_mods=job_mods,
-            baseline_food=baseline_food,
-            party_bonus=party_bonus,
-            baseline_party_bonus=baseline_party_bonus,
-            mode=mode,
-            baseline_race=baseline_race,
-            party_synergies=party_synergies,
-            crit_rate_offset=crit_rate_offset,
-            dhit_rate_offset=dhit_rate_offset,
-            selected_items_override=selected_items_local,
-            no_meld_slots=no_meld_slots_local,
-            progress=nested_progress,
-            stop_event=stop_event,
-            allow_duplicate_unique_rings=allow_duplicate_unique_rings,
-            shortlist_parallel_workers=1,
+            selected_items_local,
+            no_meld_slots_local,
+            nested_progress,
         )
-        if not opt_results:
+        if not best:
             return None
-        return index, opt_results[0]
+        return index, best
 
     use_parallel_candidates = candidate_parallel_workers > 1 and total_candidates >= 4
     if use_parallel_candidates:
-        sim_log(
-            f"[gear-search] candidate_parallel enabled workers={candidate_parallel_workers} "
-            f"tasks={total_candidates}"
-        )
+        if debug_enabled:
+            sim_log(
+                f"[gear-search] candidate_parallel enabled workers={candidate_parallel_workers} "
+                f"tasks={total_candidates}"
+            )
         with ThreadPoolExecutor(max_workers=candidate_parallel_workers) as ex:
             futures = [
                 ex.submit(_optimize_search_candidate, idx, state, None)
@@ -4023,11 +4093,7 @@ def search_gearsets(
                 if fallback_item is None:
                     continue
                 effective_item = fallback_item
-            if (
-                slot_name in {"ring1", "ring2"}
-                and bool(getattr(effective_item, "unique", False))
-                and not allow_duplicate_unique_rings
-            ):
+            if slot_name in {"ring1", "ring2"} and bool(getattr(effective_item, "unique", False)):
                 if item_id in seen_unique:
                     continue
                 seen_unique.add(item_id)
@@ -4088,46 +4154,25 @@ def search_gearsets(
                         swapped_selected, swapped_no_meld = _resolve_search_selected_items(swapped)
                         if not swapped_selected:
                             continue
-                        swapped_results = optimize(
+                        swapped_best = _run_optimize_cached(
                             swapped,
-                            items_by_id,
-                            materia_catalog,
-                            foods,
-                            casts,
-                            fight_duration_ms,
-                            cap_table,
-                            damage_summary=damage_summary,
-                            baseline_raw_stats=baseline_raw_stats,
-                            baseline_items=baseline_items,
-                            baseline_gcd=None,
-                            job_mods=job_mods,
-                            baseline_food=baseline_food,
-                            party_bonus=party_bonus,
-                            baseline_party_bonus=baseline_party_bonus,
-                            mode=mode,
-                            baseline_race=baseline_race,
-                            party_synergies=party_synergies,
-                            crit_rate_offset=crit_rate_offset,
-                            dhit_rate_offset=dhit_rate_offset,
-                            selected_items_override=swapped_selected,
-                            no_meld_slots=swapped_no_meld,
-                            progress=None,
-                            stop_event=stop_event,
-                            allow_duplicate_unique_rings=allow_duplicate_unique_rings,
-                            shortlist_parallel_workers=1,
+                            swapped_selected,
+                            swapped_no_meld,
+                            None,
                         )
-                        if not swapped_results:
+                        if not swapped_best:
                             continue
-                        swapped_best_gs, swapped_best_score, swapped_best_gcd = swapped_results[0]
+                        swapped_best_gs, swapped_best_score, swapped_best_gcd = swapped_best
                         if swapped_best_score > slot_best_score + 1e-6:
                             slot_best_gs = swapped_best_gs
                             slot_best_score = swapped_best_score
                             slot_best_gcd = swapped_best_gcd
                     if slot_best_score > best_score + 1e-6:
-                        sim_log(
-                            f"[gear-search] local_refine result={result_index} iter={iteration + 1} "
-                            f"slot={slot_name} score={best_score:.4f}->{slot_best_score:.4f}"
-                        )
+                        if debug_enabled:
+                            sim_log(
+                                f"[gear-search] local_refine result={result_index} iter={iteration + 1} "
+                                f"slot={slot_name} score={best_score:.4f}->{slot_best_score:.4f}"
+                            )
                         best_gs, best_score, best_gcd = slot_best_gs, slot_best_score, slot_best_gcd
                         improved_this_round = True
                         improved_any = True
@@ -4150,10 +4195,11 @@ def search_gearsets(
 
     if progress and finalize_progress:
         progress(100, "装備検索を含む最適化が完了しました")
-    sim_log(
-        f"[gear-search] done slots={len(slot_order)} shortlist={len(shortlist)} results={len(results)}"
-    )
-    return results[:3]
+    if debug_enabled:
+        sim_log(
+            f"[gear-search] done slots={len(slot_order)} shortlist={len(shortlist)} results={len(results)}"
+        )
+    return results[:8]
 
 
 def MateriaAwareSelection(selection, melds: List[MateriaSlotSelection]):
@@ -4163,4 +4209,5 @@ def MateriaAwareSelection(selection, melds: List[MateriaSlotSelection]):
         materia=list(melds),
         lock_item=bool(getattr(selection, "lock_item", False)),
         lock_materia=bool(getattr(selection, "lock_materia", False)),
+        excluded_item_ids=list(getattr(selection, "excluded_item_ids", []) or []),
     )

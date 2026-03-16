@@ -110,6 +110,7 @@ class ItemSelection:
     materia: List[MateriaSlotSelection] = field(default_factory=list)
     lock_item: bool = False
     lock_materia: bool = False
+    excluded_item_ids: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -135,6 +136,13 @@ class Gearset:
                     "item_id": sel.item_id,
                     "lock_item": bool(getattr(sel, "lock_item", False)),
                     "lock_materia": bool(getattr(sel, "lock_materia", False)),
+                    "excluded_item_ids": list(
+                        dict.fromkeys(
+                            int(v)
+                            for v in list(getattr(sel, "excluded_item_ids", []) or [])
+                            if int(v or 0) > 0
+                        )
+                    ),
                     "materia": [
                         {"base_param": (m.base_param if m else 0), "grade": (m.grade if m else 0)}
                         for m in (sel.materia or [])
@@ -159,6 +167,11 @@ class Gearset:
                 materia=materia,
                 lock_item=bool(sel.get("lock_item", False)),
                 lock_materia=bool(sel.get("lock_materia", False)),
+                excluded_item_ids=list(
+                    dict.fromkeys(
+                        int(v) for v in list(sel.get("excluded_item_ids", []) or []) if int(v or 0) > 0
+                    )
+                ),
             )
         return cls(
             job=data.get("job"),

@@ -4,14 +4,15 @@ import json
 import os
 import time
 import re
+from urllib.parse import quote_plus
 from datetime import datetime
 from pathlib import Path
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import Qt, QThreadPool, QSize, QTimer, QSignalBlocker
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import Qt, QThreadPool, QSize, QTimer, QSignalBlocker, QUrl
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QAbstractItemView,
@@ -48,6 +49,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHeaderView,
     QMenu,
+    QTabBar,
 )
 
 import httpx
@@ -106,6 +108,7 @@ SAVED_COL_DHT = 11
 SAVED_COL_DET = 12
 SAVED_COL_SPS = 13
 SAVED_COL_FOOD = 14
+SAVED_COL_EXPORT = 15
 
 XIVGEAR_SLOT_MAP = {
     "Weapon": "weapon",
@@ -128,6 +131,20 @@ XIVGEAR_SLOT_MAP = {
     "Ring1": "ring1",
     "RingRight": "ring2",
     "Ring2": "ring2",
+}
+GEARSIM_TO_XIVGEAR_SLOT_MAP = {
+    "weapon": "Weapon",
+    "offhand": "OffHand",
+    "head": "Head",
+    "body": "Body",
+    "hands": "Hand",
+    "legs": "Legs",
+    "feet": "Feet",
+    "earrings": "Ears",
+    "necklace": "Neck",
+    "bracelet": "Wrist",
+    "ring1": "RingLeft",
+    "ring2": "RingRight",
 }
 
 
@@ -502,6 +519,9 @@ class MainWindow(QMainWindow):
         self.slot_tables: Dict[str, QTableWidget] = {}
         self.slot_lock_item_checks: Dict[str, QCheckBox] = {}
         self.slot_lock_materia_checks: Dict[str, QCheckBox] = {}
+        self.slot_exclude_labels: Dict[str, QLabel] = {}
+        self._optimal_variant_entries: List[Dict[str, object]] = []
+        self._applying_optimal_variant_tab: bool = False
         self._materia_icon_cache: Dict[str, QIcon] = {}
         self.action_data: Dict[int, object] = {}
         self.status_data: Dict[int, object] = {}
@@ -512,6 +532,9 @@ class MainWindow(QMainWindow):
         self._icon_cache_dir = writable_cache_dir() / "icons"
         self._prefetch_icons_started: bool = False
         self._prefetched_item_icon_urls: set = set()
+        self._food_lookup_by_id: Dict[int, object] = {}
+        self._job_mods_cache: Dict[str, Dict[str, int]] = {}
+        self._raw_stats_cache: Dict[Tuple, Tuple[Dict[int, int], Dict[str, object]]] = {}
         self._populate_queue: List[dict] = []
         self._is_populating: bool = False
         self._pending_populate: Optional[Tuple[str, int, int]] = None
@@ -908,11 +931,11 @@ class MainWindow(QMainWindow):
         saved_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
         saved_group.setMinimumHeight(saved_group.fontMetrics().height() + 12)
         saved_layout = QVBoxLayout()
-        self.saved_sets_table = QTableWidget(0, 15)
+        self.saved_sets_table = QTableWidget(0, 16)
         if hasattr(self.saved_sets_table, "setUniformRowHeights"):
             self.saved_sets_table.setUniformRowHeights(True)
         self.saved_sets_table.setHorizontalHeaderLabels(
-            ["", "鍵", "セット名", "モード", "スコア", "期待値スコア", "GCD", "WD", "HP", "MAIN", "CRT", "DHT", "DET", "SPS", "食事"]
+            ["", "鍵", "セット名", "モード", "スコア", "期待値スコア", "GCD", "WD", "HP", "MAIN", "CRT", "DHT", "DET", "SPS", "食事", "出力"]
         )
         self.saved_sets_table.verticalHeader().setVisible(False)
         self.saved_sets_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -931,8 +954,8 @@ class MainWindow(QMainWindow):
             100,
             self.saved_sets_table.fontMetrics().horizontalAdvance("あ" * 6) + 24,
         )
-        for col in range(14):
-            if col in {SAVED_COL_HANDLE, SAVED_COL_LOCK}:
+        for col in range(16):
+            if col in {SAVED_COL_HANDLE, SAVED_COL_LOCK, SAVED_COL_EXPORT}:
                 mode = QHeaderView.Fixed
             elif col == SAVED_COL_NAME:
                 mode = QHeaderView.Interactive
@@ -944,6 +967,7 @@ class MainWindow(QMainWindow):
         self.saved_sets_table.setColumnWidth(SAVED_COL_HANDLE, 30)
         self.saved_sets_table.setColumnWidth(SAVED_COL_LOCK, 56)
         self.saved_sets_table.setColumnWidth(SAVED_COL_NAME, self._saved_set_name_col_width)
+        self.saved_sets_table.setColumnWidth(SAVED_COL_EXPORT, 48)
         self.saved_sets_table.itemSelectionChanged.connect(self.on_saved_set_selected)
         self.saved_sets_table.itemChanged.connect(self.on_saved_set_item_changed)
         self.saved_sets_table.cellClicked.connect(self.on_saved_set_cell_clicked)
@@ -960,6 +984,8 @@ class MainWindow(QMainWindow):
         self.btn_save_set.clicked.connect(self.on_save_set_to_history)
         self.btn_import_xivgear_clipboard = QPushButton("jsonをｸﾘｯﾌﾟﾎﾞｰﾄﾞからｲﾝﾎﾟｰﾄ(XIVGear)")
         self.btn_import_xivgear_clipboard.clicked.connect(self.on_import_xivgear_clipboard)
+        self.btn_export_xivgear_clipboard = QPushButton("jsonをｸﾘｯﾌﾟﾎﾞｰﾄﾞにｴｸｽﾎﾟｰﾄ(XIVGear)")
+        self.btn_export_xivgear_clipboard.clicked.connect(self.on_export_xivgear_clipboard)
         self.btn_delete_set = QPushButton("削除")
         self.btn_delete_set.clicked.connect(self.on_delete_saved_set)
         self.party_synergy_checks = {}
@@ -994,6 +1020,7 @@ class MainWindow(QMainWindow):
         sync_line.addWidget(QLabel("評価モード"))
         sync_line.addWidget(self.calc_mode)
         sync_line.addWidget(self.btn_save_set)
+        sync_line.addWidget(self.btn_export_xivgear_clipboard)
         sync_line.addWidget(self.btn_import_xivgear_clipboard)
         sync_line.addWidget(self.btn_delete_set)
         self._refresh_party_synergy_ui()
@@ -1021,6 +1048,14 @@ class MainWindow(QMainWindow):
         gear_container_layout = QVBoxLayout(gear_container)
         gear_container_layout.setContentsMargins(0, 0, 0, 0)
         gear_container_layout.addWidget(gear_scroll, stretch=1)
+        self.optimal_variant_tabs = QTabBar()
+        self.optimal_variant_tabs.setDocumentMode(True)
+        self.optimal_variant_tabs.setDrawBase(False)
+        self.optimal_variant_tabs.setUsesScrollButtons(True)
+        self.optimal_variant_tabs.setExpanding(False)
+        self.optimal_variant_tabs.setVisible(False)
+        self.optimal_variant_tabs.currentChanged.connect(self._on_optimal_variant_tab_changed)
+        gear_container_layout.addWidget(self.optimal_variant_tabs)
         gear_container_layout.addLayout(calc_line)
 
         memo_group = QGroupBox("メモ")
@@ -1060,6 +1095,10 @@ class MainWindow(QMainWindow):
         self.slot_lock_materia_checks[slot] = chk_lock_materia
         header.addWidget(chk_lock_materia)
         header.addStretch(1)
+        exclude_label = QLabel("除外: 0")
+        exclude_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.slot_exclude_labels[slot] = exclude_label
+        header.addWidget(exclude_label)
         layout.addLayout(header)
         table = QTableWidget()
         if hasattr(table, "setUniformRowHeights"):
@@ -1096,13 +1135,27 @@ class MainWindow(QMainWindow):
     def on_slot_table_selected(self, slot: str, table: QTableWidget) -> None:
         if self._applying_gearset or self._is_populating:
             return
+        self._clear_optimal_variant_tabs()
         row = table.currentRow()
         if row < 0:
             return
         item_cell = table.item(row, 0)
         if not item_cell:
             return
-        item_id = item_cell.data(Qt.UserRole)
+        item_id = self._resolve_slot_row_item_id(slot, table, row)
+        if not item_id:
+            return
+        duplicate_slot = self._duplicate_unique_ring_slot(slot, item_id)
+        if duplicate_slot is not None:
+            other_label = SLOT_LABELS.get(duplicate_slot, duplicate_slot)
+            QMessageBox.information(
+                self,
+                "ユニーク装備",
+                f"この装備は unique のため、{other_label} と重複して設定できません。",
+            )
+            previous_sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
+            self._select_table_row(table, previous_sel.item_id)
+            return
         sel = self.current_gearset.items.get(slot) or ItemSelection()
         if sel.item_id != item_id:
             sel.item_id = item_id
@@ -1121,17 +1174,41 @@ class MainWindow(QMainWindow):
         if not item:
             return
         row = item.row()
-        if row < 1 or not self._is_compressed_table_row(table, row):
+        if row < 1:
             return
-        member_ids = self._compressed_row_member_ids(table, row)
-        if len(member_ids) <= 1:
-            return
-        table.setCurrentCell(row, 0)
+        if table.currentRow() != row:
+            blocker = QSignalBlocker(table)
+            table.setCurrentCell(row, 0)
         menu = QMenu(table)
-        action = menu.addAction("まとめ装備一覧を表示")
+        is_compressed = self._is_compressed_table_row(table, row)
+        row_member_ids = self._row_member_ids_for_exclusion(table, row)
+        is_excluded = bool(row_member_ids) and all(
+            item_id in self._slot_excluded_item_id_set(slot) for item_id in row_member_ids
+        )
+        if is_compressed:
+            member_ids = self._compressed_row_member_ids(table, row)
+            if len(member_ids) <= 1:
+                return
+            action_grouped = menu.addAction("まとめ装備一覧を表示")
+            action_exclude = menu.addAction(
+                "検索時除外を解除" if is_excluded else "検索時除外"
+            )
+            chosen = menu.exec(table.viewport().mapToGlobal(viewport_pos))
+            if chosen is action_grouped:
+                self._show_grouped_slot_items_dialog(slot, member_ids)
+            elif chosen is action_exclude:
+                self._toggle_slot_item_exclusion(slot, member_ids, exclude=not is_excluded)
+            return
+        item_id = self._table_row_item_id(table, row)
+        if not item_id:
+            return
+        action_search = menu.addAction("FF14公式DBで検索")
+        action_exclude = menu.addAction("検索時除外を解除" if is_excluded else "検索時除外")
         chosen = menu.exec(table.viewport().mapToGlobal(viewport_pos))
-        if chosen is action:
-            self._show_grouped_slot_items_dialog(slot, member_ids)
+        if chosen is action_search:
+            self._open_official_db_search_for_item(item_id)
+        elif chosen is action_exclude:
+            self._toggle_slot_item_exclusion(slot, [item_id], exclude=not is_excluded)
 
     # ---- Task helpers ----
     def start_worker(self, fn, finished_cb, silent_if_busy: bool = False, **kwargs) -> None:
@@ -1243,9 +1320,170 @@ class MainWindow(QMainWindow):
         checkbox = self.slot_lock_materia_checks.get(slot)
         return bool(checkbox and checkbox.isChecked())
 
+    def _duplicate_unique_ring_slot(
+        self,
+        slot: str,
+        item_id: Optional[int],
+        gearset: Optional[Gearset] = None,
+    ) -> Optional[str]:
+        if slot not in {"ring1", "ring2"} or not item_id:
+            return None
+        item = self.items_by_id.get(int(item_id))
+        if not item or not bool(getattr(item, "unique", False)):
+            return None
+        other_slot = "ring1" if slot == "ring2" else "ring2"
+        target_gearset = gearset or self.current_gearset
+        other_sel = (target_gearset.items or {}).get(other_slot) or ItemSelection()
+        other_item_id = int(other_sel.item_id or 0) if other_sel.item_id else 0
+        if other_item_id == int(item_id):
+            return other_slot
+        return None
+
+    def _normalize_unique_ring_duplicates(self, gear: Gearset) -> Gearset:
+        if not gear or not getattr(gear, "items", None):
+            return gear
+        seen_unique: set = set()
+        for slot in ("ring1", "ring2"):
+            sel = (gear.items or {}).get(slot)
+            if not sel or not sel.item_id:
+                continue
+            item_id = int(sel.item_id or 0)
+            item = self.items_by_id.get(item_id)
+            if not item or not bool(getattr(item, "unique", False)):
+                continue
+            if item_id in seen_unique:
+                sel.item_id = None
+                sel.materia = []
+                sel.lock_item = False
+                sel.lock_materia = False
+                gear.items[slot] = sel
+                continue
+            seen_unique.add(item_id)
+        return gear
+
+    def _slot_excluded_item_ids(self, slot: str) -> List[int]:
+        sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
+        seen: set = set()
+        excluded_ids: List[int] = []
+        for value in list(getattr(sel, "excluded_item_ids", []) or []):
+            try:
+                item_id = int(value or 0)
+            except Exception:
+                continue
+            if item_id <= 0 or item_id in seen:
+                continue
+            seen.add(item_id)
+            excluded_ids.append(item_id)
+        return excluded_ids
+
+    def _slot_excluded_item_id_set(self, slot: str) -> set[int]:
+        return set(self._slot_excluded_item_ids(slot))
+
+    def _dedupe_item_ids(self, values: List[int]) -> List[int]:
+        seen: set[int] = set()
+        member_ids: List[int] = []
+        for value in values:
+            try:
+                item_id = int(value or 0)
+            except Exception:
+                continue
+            if item_id <= 0 or item_id in seen:
+                continue
+            seen.add(item_id)
+            member_ids.append(item_id)
+        return member_ids
+
+    def _row_member_ids_for_exclusion(self, table: QTableWidget, row: int) -> List[int]:
+        if row < 0:
+            return []
+        member_ids = self._compressed_row_member_ids(table, row)
+        if member_ids:
+            return member_ids
+        item_id = self._table_row_item_id(table, row)
+        return [item_id] if item_id else []
+
+    def _resolve_slot_row_item_id(self, slot: str, table: QTableWidget, row: int) -> Optional[int]:
+        member_ids = self._dedupe_item_ids(self._row_member_ids_for_exclusion(table, row))
+        if not member_ids:
+            return None
+        current_sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
+        current_item_id = int(current_sel.item_id or 0) if current_sel.item_id else 0
+        if current_item_id in member_ids and self._duplicate_unique_ring_slot(slot, current_item_id) is None:
+            return current_item_id
+        for candidate_id in member_ids:
+            if self._duplicate_unique_ring_slot(slot, candidate_id) is None:
+                return int(candidate_id)
+        return int(member_ids[0])
+
+    def _set_row_excluded_style(self, table: QTableWidget, row: int, excluded: bool) -> None:
+        for col in range(table.columnCount()):
+            cell = table.item(row, col)
+            if not cell:
+                continue
+            font = cell.font()
+            if font.strikeOut() != excluded:
+                font.setStrikeOut(excluded)
+                cell.setFont(font)
+
+    def _refresh_slot_exclusion_visuals(self, slot: str) -> None:
+        label = self.slot_exclude_labels.get(slot)
+        excluded_ids = self._slot_excluded_item_id_set(slot)
+        if label is not None:
+            label.setText(f"除外: {len(excluded_ids)}")
+        table = self.slot_tables.get(slot)
+        if table is None:
+            return
+        for row in range(table.rowCount()):
+            member_ids = self._row_member_ids_for_exclusion(table, row)
+            excluded = bool(member_ids) and all(item_id in excluded_ids for item_id in member_ids)
+            self._set_row_excluded_style(table, row, excluded)
+
+    def _refresh_all_slot_exclusion_visuals(self) -> None:
+        for slot in self.slot_tables.keys():
+            self._refresh_slot_exclusion_visuals(slot)
+
+    def _toggle_slot_item_exclusion(
+        self,
+        slot: str,
+        item_ids: List[int],
+        *,
+        exclude: Optional[bool] = None,
+    ) -> None:
+        normalized_ids: List[int] = []
+        seen: set = set()
+        for value in item_ids:
+            try:
+                item_id = int(value or 0)
+            except Exception:
+                continue
+            if item_id <= 0 or item_id in seen:
+                continue
+            seen.add(item_id)
+            normalized_ids.append(item_id)
+        if not normalized_ids:
+            return
+        self._clear_optimal_variant_tabs()
+        sel = self.current_gearset.items.get(slot) or ItemSelection()
+        current = self._slot_excluded_item_id_set(slot)
+        if exclude is None:
+            exclude = not all(item_id in current for item_id in normalized_ids)
+        if exclude:
+            current.update(normalized_ids)
+        else:
+            current.difference_update(normalized_ids)
+        sel.excluded_item_ids = sorted(current)
+        self.current_gearset.items[slot] = sel
+        self._refresh_slot_exclusion_visuals(slot)
+        self._persist_current_gearset_to_selected_saved_set()
+        slot_label = SLOT_LABELS.get(slot, slot)
+        self.progress_label.setText(
+            f"{slot_label} の除外設定を更新しました"
+        )
+
     def _on_slot_lock_toggled(self, slot: str) -> None:
         if self._applying_gearset or self._is_populating:
             return
+        self._clear_optimal_variant_tabs()
         sel = self.current_gearset.items.get(slot) or ItemSelection()
         sel.lock_item = self._slot_item_lock_enabled(slot)
         sel.lock_materia = self._slot_materia_lock_enabled(slot)
@@ -1662,6 +1900,17 @@ class MainWindow(QMainWindow):
                 break
 
     # ---- Saved sets ----
+    def _rebuild_food_lookup_cache(self) -> None:
+        lookup: Dict[int, object] = {}
+        for food in self.foods:
+            food_id = int(getattr(food, "food_id", 0) or 0)
+            source_row_id = int(getattr(food, "source_row_id", 0) or 0)
+            if food_id > 0:
+                lookup[food_id] = food
+            if source_row_id > 0:
+                lookup[source_row_id] = food
+        self._food_lookup_by_id = lookup
+
     def _find_food_by_id(self, food_id: Optional[int]):
         if not food_id:
             return None
@@ -1669,12 +1918,9 @@ class MainWindow(QMainWindow):
             target_id = int(food_id)
         except Exception:
             return None
-        for food in self.foods:
-            if int(getattr(food, "food_id", 0) or 0) == target_id:
-                return food
-            if int(getattr(food, "source_row_id", 0) or 0) == target_id:
-                return food
-        return None
+        if not self._food_lookup_by_id and self.foods:
+            self._rebuild_food_lookup_cache()
+        return self._food_lookup_by_id.get(target_id)
 
     def _resolve_food_id(self, raw_food_id: Optional[int]) -> Optional[int]:
         if raw_food_id is None:
@@ -2207,6 +2453,16 @@ class MainWindow(QMainWindow):
                     | Qt.ItemIsEditable
                 )
                 self.saved_sets_table.setItem(row, SAVED_COL_NAME, name_item)
+                export_item = QTableWidgetItem("")
+                export_item.setFlags(
+                    Qt.ItemIsSelectable
+                    | Qt.ItemIsEnabled
+                    | Qt.ItemIsUserCheckable
+                )
+                export_item.setCheckState(Qt.Checked if bool(entry.get("export_checked", False)) else Qt.Unchecked)
+                export_item.setTextAlignment(Qt.AlignCenter)
+                export_item.setData(Qt.UserRole, entry)
+                self.saved_sets_table.setItem(row, SAVED_COL_EXPORT, export_item)
                 if selected_entry_id is not None and entry.get("id") == selected_entry_id:
                     restored_row = row
                 for col, text in (
@@ -2237,6 +2493,7 @@ class MainWindow(QMainWindow):
                 self.saved_sets_table.setColumnWidth(SAVED_COL_HANDLE, 30)
                 self.saved_sets_table.setColumnWidth(SAVED_COL_LOCK, 56)
                 self.saved_sets_table.setColumnWidth(SAVED_COL_NAME, self._saved_set_name_col_width)
+                self.saved_sets_table.setColumnWidth(SAVED_COL_EXPORT, 48)
                 for col in range(SAVED_COL_MODE, self.saved_sets_table.columnCount()):
                     self.saved_sets_table.resizeColumnToContents(col)
                 self._saved_table_sized_once = True
@@ -2360,6 +2617,207 @@ class MainWindow(QMainWindow):
                     return None
         return None
 
+    def _score_tie_tolerance(self, mode: str) -> float:
+        return 0.005 if mode == "dmg100p" else 0.05
+
+    def _clear_optimal_variant_tabs(self) -> None:
+        self._optimal_variant_entries = []
+        if not hasattr(self, "optimal_variant_tabs"):
+            return
+        blocker = QSignalBlocker(self.optimal_variant_tabs)
+        try:
+            while self.optimal_variant_tabs.count() > 0:
+                self.optimal_variant_tabs.removeTab(self.optimal_variant_tabs.count() - 1)
+            self.optimal_variant_tabs.setVisible(False)
+        finally:
+            del blocker
+
+    def _set_optimal_variant_tabs(
+        self,
+        entries: List[Dict[str, object]],
+        *,
+        selected_index: int = 0,
+    ) -> None:
+        self._clear_optimal_variant_tabs()
+        if len(entries) <= 1 or not hasattr(self, "optimal_variant_tabs"):
+            return
+        self._optimal_variant_entries = list(entries)
+        blocker = QSignalBlocker(self.optimal_variant_tabs)
+        try:
+            for idx, entry in enumerate(self._optimal_variant_entries, 1):
+                tab_index = self.optimal_variant_tabs.addTab(str(idx))
+                tooltip = (
+                    f"候補 {idx}\n"
+                    f"スコア: {self._format_saved_score(self.last_optimize_mode or 'simdps_self', entry.get('score'))}\n"
+                    f"期待値スコア: {self._format_saved_score(self.last_optimize_mode or 'simdps_self', entry.get('expected_score'))}"
+                )
+                self.optimal_variant_tabs.setTabToolTip(tab_index, tooltip)
+            self.optimal_variant_tabs.setCurrentIndex(max(0, min(selected_index, len(self._optimal_variant_entries) - 1)))
+            self.optimal_variant_tabs.setVisible(True)
+        finally:
+            del blocker
+
+    def _on_optimal_variant_tab_changed(self, index: int) -> None:
+        if self._applying_optimal_variant_tab:
+            return
+        if index < 0 or index >= len(self._optimal_variant_entries):
+            return
+        entry = self._optimal_variant_entries[index]
+        gear = entry.get("gearset")
+        if not isinstance(gear, Gearset):
+            return
+        mode = self.last_optimize_mode or "simdps_self"
+        self._applying_optimal_variant_tab = True
+        try:
+            self._pending_saved_set_ui_context = self._capture_saved_set_ui_context(gear.job)
+            self._apply_gearset_to_ui(gear)
+        finally:
+            self._applying_optimal_variant_tab = False
+        for slot in self.slot_tables.keys():
+            self._refresh_slot_selected_display(slot)
+        self._apply_eval_result(
+            mode,
+            float(entry.get("score") or 0.0),
+            float(entry.get("gcd") or 0.0),
+            float(entry.get("expected_score") or entry.get("score") or 0.0),
+        )
+        self.progress_label.setText(f"候補 {index + 1} を反映しました。")
+
+    def _gearset_has_uncompressed_difference(self, base: Gearset, other: Gearset) -> bool:
+        for slot in GEAR_SLOTS:
+            base_sel = (base.items or {}).get(slot) or ItemSelection()
+            other_sel = (other.items or {}).get(slot) or ItemSelection()
+            base_id = int(base_sel.item_id or 0) if base_sel.item_id else 0
+            other_id = int(other_sel.item_id or 0) if other_sel.item_id else 0
+            if base_id == other_id:
+                continue
+            table = self.slot_tables.get(slot)
+            row_map = self.slot_row_index.get(slot, {})
+            base_row = row_map.get(base_id)
+            other_row = row_map.get(other_id)
+            if table is None or base_row is None or other_row is None:
+                return True
+            if base_row != other_row:
+                return True
+            if not self._is_compressed_table_row(table, base_row):
+                return True
+        return False
+
+    def _evaluate_gearset_scores(self, gearset: Gearset, mode: str) -> Optional[Tuple[float, float, float]]:
+        job = gearset.job
+        if not job:
+            return None
+        if mode == "dmg100p" and not self.jobs_data:
+            return None
+        if mode in {"simdps", "simdps_self"}:
+            summary = self.damage_summary_self if mode == "simdps_self" else self.damage_summary
+            if not summary:
+                return None
+        food = self._find_food_by_id(gearset.food_id)
+        raw_stats, selected_items = self._compute_raw_stats_with_melds(gearset)
+        if self._simdps_baseline_raw_stats is None or self._simdps_baseline_items is None:
+            self._update_simdps_baseline_data()
+        baseline_raw, baseline_items, baseline_food, baseline_party, baseline_race = self._resolve_simdps_baseline(
+            raw_stats,
+            selected_items,
+            food,
+        )
+        party_synergies = self._selected_party_synergies()
+        fight_ms = 0
+        if self.selected_fight:
+            start_time = self.selected_fight.get("startTime", self.selected_fight.get("start_time", 0))
+            end_time = self.selected_fight.get("endTime", self.selected_fight.get("end_time", 0))
+            fight_ms = end_time - start_time
+        if mode in {"simdps", "simdps_self"}:
+            if fight_ms <= 0:
+                return None
+            fight_ms = self._simdps_effective_duration_ms(fight_ms)
+        eval_kwargs = {
+            "job_mods": self._get_job_mods(job),
+            "food": food,
+            "party_bonus": self.party_bonus.value(),
+            "baseline_raw_stats": baseline_raw,
+            "baseline_items": baseline_items,
+            "selected_items": selected_items,
+            "baseline_food": baseline_food,
+            "baseline_party_bonus": baseline_party,
+            "baseline_race": baseline_race,
+            "party_synergies": party_synergies,
+            "race": gearset.race,
+            "mode": mode,
+            "level": gearset.level,
+        }
+        summary = self.damage_summary_self if mode == "simdps_self" else self.damage_summary
+        score, expected_score, gcd = optimizer.evaluate_score_pair(
+            raw_stats,
+            job,
+            self.casts,
+            fight_ms,
+            gearset.target_gcd,
+            damage_summary=summary if mode in {"simdps", "simdps_self"} else None,
+            debug=False,
+            crit_rate_offset=self._crit_rate_adjust_value(),
+            dhit_rate_offset=self._dhit_rate_adjust_value(),
+            **eval_kwargs,
+        )
+        return float(score), float(expected_score), float(gcd)
+
+    def _build_optimal_variant_entries(
+        self,
+        results: List[Tuple[Gearset, float, float]],
+        mode: str,
+    ) -> List[Dict[str, object]]:
+        if not results:
+            return []
+        evaluated_entries: List[Dict[str, object]] = []
+        for gear, raw_score, raw_gcd in results:
+            evaluated = self._evaluate_gearset_scores(gear, mode)
+            if evaluated is None:
+                score = float(raw_score)
+                expected_score = float(raw_score)
+                gcd = float(raw_gcd)
+            else:
+                score, expected_score, gcd = evaluated
+            evaluated_entries.append(
+                {
+                    "gearset": gear,
+                    "score": float(score),
+                    "expected_score": float(expected_score),
+                    "gcd": float(gcd),
+                }
+            )
+        base_entry = evaluated_entries[0]
+        tie_tolerance = self._score_tie_tolerance(mode)
+        entries: List[Dict[str, object]] = [base_entry]
+        base_gear = base_entry["gearset"]
+        base_score = float(base_entry["score"])
+        for entry in evaluated_entries[1:]:
+            gear = entry["gearset"]
+            if not isinstance(gear, Gearset):
+                continue
+            if abs(float(entry["score"]) - base_score) > tie_tolerance:
+                continue
+            if not self._gearset_has_uncompressed_difference(base_gear, gear):
+                continue
+            entries.append(entry)
+        return entries
+
+    def _top_tied_optimized_results(
+        self,
+        results: List[Tuple[Gearset, float, float]],
+        mode: str,
+    ) -> List[Tuple[Gearset, float, float]]:
+        if not results:
+            return []
+        tie_tolerance = self._score_tie_tolerance(mode)
+        best_score = float(results[0][1])
+        tied: List[Tuple[Gearset, float, float]] = []
+        for entry in results:
+            if abs(float(entry[1]) - best_score) > tie_tolerance:
+                break
+            tied.append(entry)
+        return tied
+
     def _current_rate_adjust_text(self) -> str:
         job = self.current_gearset.job
         if not job or not self.jobs_data:
@@ -2397,64 +2855,8 @@ class MainWindow(QMainWindow):
         )
 
     def _evaluate_current_gearset_scores(self, mode: str) -> Optional[Tuple[float, float, float]]:
-        job = self.current_gearset.job
-        if not job:
-            return None
-        if mode == "dmg100p" and not self.jobs_data:
-            return None
-        if mode in {"simdps", "simdps_self"}:
-            summary = self.damage_summary_self if mode == "simdps_self" else self.damage_summary
-            if not summary:
-                return None
         self._sync_ui_to_gearset()
-        food = self._find_food_by_id(self.current_gearset.food_id)
-        raw_stats, selected_items = self._compute_raw_stats_with_melds(self.current_gearset)
-        if self._simdps_baseline_raw_stats is None or self._simdps_baseline_items is None:
-            self._update_simdps_baseline_data()
-        baseline_raw, baseline_items, baseline_food, baseline_party, baseline_race = self._resolve_simdps_baseline(
-            raw_stats,
-            selected_items,
-            food,
-        )
-        party_synergies = self._selected_party_synergies()
-        fight_ms = 0
-        if self.selected_fight:
-            start_time = self.selected_fight.get("startTime", self.selected_fight.get("start_time", 0))
-            end_time = self.selected_fight.get("endTime", self.selected_fight.get("end_time", 0))
-            fight_ms = end_time - start_time
-        if mode in {"simdps", "simdps_self"}:
-            if fight_ms <= 0:
-                return None
-            fight_ms = self._simdps_effective_duration_ms(fight_ms)
-        eval_kwargs = {
-            "job_mods": self._get_job_mods(job),
-            "food": food,
-            "party_bonus": self.party_bonus.value(),
-            "baseline_raw_stats": baseline_raw,
-            "baseline_items": baseline_items,
-            "selected_items": selected_items,
-            "baseline_food": baseline_food,
-            "baseline_party_bonus": baseline_party,
-            "baseline_race": baseline_race,
-            "party_synergies": party_synergies,
-            "race": self.current_gearset.race,
-            "mode": mode,
-            "level": self.current_gearset.level,
-        }
-        summary = self.damage_summary_self if mode == "simdps_self" else self.damage_summary
-        score, expected_score, gcd = optimizer.evaluate_score_pair(
-            raw_stats,
-            job,
-            self.casts,
-            fight_ms,
-            self.current_gearset.target_gcd,
-            damage_summary=summary if mode in {"simdps", "simdps_self"} else None,
-            debug=False,
-            crit_rate_offset=self._crit_rate_adjust_value(),
-            dhit_rate_offset=self._dhit_rate_adjust_value(),
-            **eval_kwargs,
-        )
-        return float(score), float(expected_score), float(gcd)
+        return self._evaluate_gearset_scores(self.current_gearset, mode)
 
     def _apply_eval_result(
         self,
@@ -2538,6 +2940,170 @@ class MainWindow(QMainWindow):
                 except Exception:
                     continue
         return lookup
+
+    def _xivgear_materia_export_lookup(self) -> Dict[Tuple[int, int], int]:
+        lookup: Dict[Tuple[int, int], int] = {}
+        for base_param, category in (self.materia_catalog or {}).items():
+            try:
+                base_param_id = int(base_param)
+            except Exception:
+                continue
+            for grade in category.grades:
+                try:
+                    key = (base_param_id, int(grade.grade))
+                    lookup[key] = int(grade.item_id)
+                except Exception:
+                    continue
+        return lookup
+
+    def _checked_saved_set_entries(self) -> List[dict]:
+        entries: List[dict] = []
+        for entry in self.saved_sets:
+            if isinstance(entry, dict) and bool(entry.get("export_checked", False)):
+                entries.append(entry)
+        return entries
+
+    def _xivgear_export_food_id(self, food_id: Optional[int]) -> Optional[int]:
+        food = self._find_food_by_id(food_id)
+        if not food:
+            return None
+        source_row_id = int(getattr(food, "source_row_id", 0) or 0)
+        if source_row_id > 0:
+            return source_row_id
+        resolved_food_id = int(getattr(food, "food_id", 0) or 0)
+        return resolved_food_id or None
+
+    def _xivgear_export_set(
+        self,
+        entry: dict,
+        materia_lookup: Dict[Tuple[int, int], int],
+    ) -> Tuple[Optional[dict], int]:
+        if not isinstance(entry, dict):
+            return None, 0
+        gear_data = entry.get("gearset")
+        if not isinstance(gear_data, dict):
+            return None, 0
+        gear = Gearset.from_dict(gear_data)
+        if not gear.job:
+            return None, 0
+        context = self._saved_set_ui_context(entry, gear)
+        items_blob: Dict[str, dict] = {}
+        missing_materia = 0
+        for slot in GEAR_SLOTS:
+            sel = (gear.items or {}).get(slot)
+            if not sel or not sel.item_id:
+                continue
+            xiv_slot = GEARSIM_TO_XIVGEAR_SLOT_MAP.get(slot)
+            if not xiv_slot:
+                continue
+            materia_blob: List[dict] = []
+            for meld in list(sel.materia or []):
+                try:
+                    key = (int(meld.base_param), int(meld.grade))
+                except Exception:
+                    continue
+                materia_item_id = materia_lookup.get(key)
+                if not materia_item_id:
+                    missing_materia += 1
+                    continue
+                materia_blob.append({"id": int(materia_item_id), "locked": False})
+            items_blob[xiv_slot] = {"id": int(sel.item_id), "materia": materia_blob}
+        if not items_blob:
+            return None, missing_materia
+        sync_enabled = bool(context.get("level_sync_enabled", False))
+        sync_il = int(context.get("level_sync_il", 0) or 0) if sync_enabled else None
+        level_value = xivmath.normalize_supported_level(context.get("level_sync_level", gear.level))
+        target_gcd = gear.target_gcd if gear.target_gcd is not None else context.get("target_gcd")
+        set_payload = {
+            "name": str(entry.get("name") or "セット"),
+            "items": items_blob,
+            "food": self._xivgear_export_food_id(entry.get("food_id", gear.food_id)),
+            "description": str(gear.note or ""),
+            "isSeparator": False,
+            "relicStatMemory": {},
+            "materiaMemory": {},
+            "job": gear.job,
+            "partyBonus": int(context.get("party_bonus", entry.get("party_bonus", 0)) or 0),
+            "level": int(level_value),
+        }
+        if sync_il:
+            set_payload["ilvlSync"] = int(sync_il)
+        if target_gcd:
+            set_payload["target_gcd"] = float(target_gcd)
+        return set_payload, missing_materia
+
+    def _build_xivgear_export_payload(self, entries: List[dict]) -> Tuple[Optional[dict], int]:
+        if not entries:
+            return None, 0
+        materia_lookup = self._xivgear_materia_export_lookup()
+        export_sets: List[dict] = []
+        missing_materia = 0
+        jobs: List[str] = []
+        levels: List[int] = []
+        party_bonuses: List[int] = []
+        sync_ils: List[int] = []
+        target_gcds: List[float] = []
+        first_context: Optional[dict] = None
+        for entry in entries:
+            gear_data = entry.get("gearset")
+            gear = Gearset.from_dict(gear_data) if isinstance(gear_data, dict) else None
+            set_payload, missing_count = self._xivgear_export_set(entry, materia_lookup)
+            missing_materia += missing_count
+            if not set_payload:
+                continue
+            export_sets.append(set_payload)
+            if gear and gear.job:
+                jobs.append(str(gear.job))
+            levels.append(int(set_payload.get("level") or (gear.level if gear else xivmath.CURRENT_MAX_LEVEL)))
+            party_bonuses.append(int(set_payload.get("partyBonus") or 0))
+            if set_payload.get("ilvlSync") is not None:
+                sync_ils.append(int(set_payload.get("ilvlSync") or 0))
+            if set_payload.get("target_gcd") is not None:
+                try:
+                    target_gcds.append(float(set_payload.get("target_gcd")))
+                except Exception:
+                    pass
+            if first_context is None and gear is not None:
+                first_context = self._saved_set_ui_context(entry, gear)
+        if not export_sets:
+            return None, missing_materia
+        first_job = jobs[0] if jobs else (self.current_gearset.job or "")
+        unique_jobs = sorted(set(jobs))
+        speed_pref = "spellspeed" if first_job in SPELL_SPEED_JOBS else "skillspeed"
+        context = first_context or self._capture_saved_set_ui_context(first_job)
+        item_il_min = int(context.get("item_il_min", 1) or 1)
+        item_il_max = int(context.get("item_il_max", 999) or 999)
+        food_il_min = int(context.get("food_il_min", 1) or 1)
+        food_il_max = int(context.get("food_il_max", 999) or 999)
+        payload = {
+            "name": "GearSimulator Export",
+            "sets": export_sets,
+            "level": int(levels[0] if levels else xivmath.CURRENT_MAX_LEVEL),
+            "job": first_job,
+            "partyBonus": int(party_bonuses[0] if party_bonuses else 0),
+            "sims": [{"stub": "pr-sim", "settings": {"includeInExport": True}, "name": "Dmg/100p"}],
+            "itemDisplaySettings": {
+                "showNq": False,
+                "higherRelics": True,
+                "minILvlFood": food_il_min,
+                "maxILvlFood": food_il_max,
+                "showOneStatFood": False,
+                "minILvl": item_il_min,
+                "maxILvl": item_il_max,
+            },
+            "mfm": "retain_item",
+            "mfp": [speed_pref, "crit", "dhit", "determination"],
+            "mfMinGcd": min(target_gcds) if target_gcds else 2.05,
+            "description": "",
+            "customItems": [],
+            "customFoods": [],
+            "timestamp": int(time.time() * 1000),
+            "isMultiJob": len(unique_jobs) > 1,
+            "specialStats": None,
+        }
+        if sync_ils:
+            payload["ilvlSync"] = int(sync_ils[0])
+        return payload, missing_materia
 
     def _gearset_dedup_signature(self, gear: Gearset) -> str:
         payload = gear.to_dict()
@@ -2687,6 +3253,7 @@ class MainWindow(QMainWindow):
                     "ui_context": ui_context,
                     "source": "xivgear_clipboard",
                     "locked": False,
+                    "export_checked": False,
                 }
                 stats = self._compute_saved_stats(gear, food_id, party_bonus)
                 if stats:
@@ -2731,6 +3298,26 @@ class MainWindow(QMainWindow):
         self.progress_label.setText(f"XIVGear取込: {len(entries)}件")
         QMessageBox.information(self, "取込完了", "\n".join(msg_lines))
 
+    def on_export_xivgear_clipboard(self) -> None:
+        entries = self._checked_saved_set_entries()
+        if not entries:
+            QMessageBox.warning(self, "対象なし", "保存セットの出力チェックを付けたものがありません。")
+            return
+        payload, missing_materia = self._build_xivgear_export_payload(entries)
+        if not payload:
+            QMessageBox.warning(self, "出力不可", "XIVGear形式で出力できる保存セットがありませんでした。")
+            return
+        clipboard = QApplication.clipboard()
+        if clipboard is None:
+            QMessageBox.warning(self, "コピー失敗", "クリップボードを取得できませんでした。")
+            return
+        clipboard.setText(json.dumps(payload, ensure_ascii=False, indent=2))
+        message = f"{len(payload.get('sets') or [])}件の保存セットをXIVGear JSONとしてコピーしました。"
+        if missing_materia > 0:
+            message += f" マテリア {missing_materia}件は省略しました。"
+        self.progress_label.setText(message)
+        QMessageBox.information(self, "コピー完了", message)
+
     def on_save_set_to_history(self) -> None:
         # 保持しているマテリアを消さないため、保存時は明示的に必要項目のみ更新
         self.current_gearset.target_gcd = self.input_target_gcd.value()
@@ -2769,6 +3356,7 @@ class MainWindow(QMainWindow):
             "party_bonus": self.party_bonus.value(),
             "ui_context": self._capture_saved_set_ui_context(self.current_gearset.job),
             "locked": False,
+            "export_checked": False,
         }
         stats = self._compute_saved_stats(self.current_gearset, food_id, self.party_bonus.value())
         if stats:
@@ -2814,7 +3402,6 @@ class MainWindow(QMainWindow):
         self._persist_saved_set_ui_context(entry, restored_ui_context)
         self._apply_gearset_to_ui(gear)
         self.last_eval = None
-        self._last_preview_signature = None
         if hasattr(self, "calc_result_label_left"):
             self.calc_result_label_left.setText("計算結果: 更新中...")
         self.on_save_auth(silent=True)
@@ -2823,10 +3410,22 @@ class MainWindow(QMainWindow):
     def on_saved_set_item_changed(self, item: QTableWidgetItem) -> None:
         if self._updating_saved_table:
             return
-        if not item or item.column() != SAVED_COL_NAME:
+        if not item:
             return
         entry = item.data(Qt.UserRole)
         if not isinstance(entry, dict):
+            return
+        if item.column() == SAVED_COL_EXPORT:
+            entry_id = entry.get("id")
+            new_checked = item.checkState() == Qt.Checked
+            entry["export_checked"] = new_checked
+            for e in self.saved_sets:
+                if isinstance(e, dict) and e.get("id") == entry_id:
+                    e["export_checked"] = new_checked
+                    break
+            self._schedule_saved_sets_flush(immediate=False)
+            return
+        if item.column() != SAVED_COL_NAME:
             return
         new_name = item.text().strip()
         if not new_name:
@@ -2976,9 +3575,12 @@ class MainWindow(QMainWindow):
             self._schedule_saved_sets_flush(immediate=False)
 
     def _apply_gearset_to_ui(self, gear: Gearset) -> None:
+        if not self._applying_optimal_variant_tab:
+            self._clear_optimal_variant_tabs()
         gear.race = DEFAULT_RACE
         gear.level = self._infer_sync_level_from_gear(gear)
         gear.food_id = self._resolve_food_id(gear.food_id)
+        gear = self._normalize_unique_ring_duplicates(gear)
         pending_entry = self._pending_saved_set_entry if isinstance(self._pending_saved_set_entry, dict) else None
         pending_ui_context = self._pending_saved_set_ui_context if isinstance(self._pending_saved_set_ui_context, dict) else None
         need_job_reload = bool(
@@ -3030,6 +3632,7 @@ class MainWindow(QMainWindow):
                         self.item_levels,
                         gear.job,
                     )
+                    self._raw_stats_cache.clear()
                 if gear.job in self.items_by_job:
                     if pending_entry is not None:
                         refreshed_ui_context = self._saved_set_ui_context(pending_entry, gear)
@@ -3071,6 +3674,7 @@ class MainWindow(QMainWindow):
                     if not table:
                         continue
                     self._select_table_row(table, sel.item_id)
+            self._refresh_all_slot_exclusion_visuals()
             self._ensure_food_combo_item(gear.food_id)
             idx = self.food_combo.findData(self._resolve_food_id(gear.food_id))
             target_index = idx if idx != -1 else 0
@@ -5558,6 +6162,9 @@ class MainWindow(QMainWindow):
         self.foods = [f for f in (result.get("food", []) or []) if optimizer.is_combat_food(f)]
         self.jobs_data = result.get("jobs", {})
         self.item_levels = result.get("levels", {})
+        self._rebuild_food_lookup_cache()
+        self._job_mods_cache.clear()
+        self._raw_stats_cache.clear()
         job = self.current_gearset.job
         if job and job in self.items_by_job:
             self.cap_table = optimizer.build_cap_table(
@@ -5607,6 +6214,14 @@ class MainWindow(QMainWindow):
         if not job:
             return
         if job in self.items_by_job:
+            if self.base_params and self.item_levels:
+                self.cap_table = optimizer.build_cap_table(
+                    self.items_by_job.get(job, []),
+                    self.base_params,
+                    self.item_levels,
+                    job,
+                )
+                self._raw_stats_cache.clear()
             self._init_il_filter_for_job(job, self.items_by_job.get(job, []), force=True)
             self.populate_items(job)
             return
@@ -5659,6 +6274,7 @@ class MainWindow(QMainWindow):
         self.items_by_job[job] = items
         for item in items:
             self.items_by_id[item.item_id] = item
+        self._raw_stats_cache.clear()
         self.cap_table = optimizer.build_cap_table(
             items,
             self.base_params,
@@ -5727,9 +6343,10 @@ class MainWindow(QMainWindow):
             name_text: str,
             member_ids: List[int],
         ) -> Dict[str, object]:
+            normalized_member_ids = self._dedupe_item_ids(member_ids)
             return {
                 "item_id": int(item.item_id),
-                "member_ids": [int(v) for v in member_ids],
+                "member_ids": normalized_member_ids,
                 "il_text": il_text,
                 "name_text": name_text,
                 "icon_url": getattr(item, "icon_url", None),
@@ -5819,7 +6436,9 @@ class MainWindow(QMainWindow):
                         "min_il": int(group_min_il),
                     }
                 else:
-                    group["member_ids"].append(int(item.item_id))
+                    item_id = int(item.item_id)
+                    if item_id not in group["member_ids"]:
+                        group["member_ids"].append(item_id)
                     group["min_il"] = min(int(group["min_il"]), int(group_min_il))
 
         if high_sync_groups:
@@ -5829,14 +6448,18 @@ class MainWindow(QMainWindow):
             for group in groups:
                 rep = group["rep"]
                 effective_rep = group["effective"]
-                member_ids = group["member_ids"]
+                member_ids = self._dedupe_item_ids(group["member_ids"])
                 min_il = int(group["min_il"])
+                if len(member_ids) <= 1:
+                    name_text = display_name_with_fallback(getattr(rep, "name_ja", None), rep.name)
+                else:
+                    name_text = f"IL{min_il}以上の装備 ({len(member_ids)}件)"
                 high_rows.append(
                     _row_from_item(
                         rep,
                         effective_rep,
                         il_text=f"{min_il}+",
-                        name_text=f"IL{min_il}以上の装備 ({len(member_ids)}件)",
+                        name_text=name_text,
                         member_ids=member_ids,
                     )
                 )
@@ -6024,6 +6647,9 @@ class MainWindow(QMainWindow):
                 if cell:
                     cell.setData(Qt.UserRole + 1, group_size)
                     cell.setData(Qt.UserRole + 3, member_ids)
+            excluded_ids = self._slot_excluded_item_id_set(entry["slot"])
+            row_excluded = bool(member_ids) and all(mapped_id in excluded_ids for mapped_id in member_ids)
+            self._set_row_excluded_style(table, row, row_excluded)
             for mapped_id in member_ids:
                 row_map[int(mapped_id)] = row
         entry["cursor"] = end
@@ -6038,6 +6664,7 @@ class MainWindow(QMainWindow):
             else:
                 self._select_table_row(table, None)
                 self._last_selected_items[slot] = None
+            self._refresh_slot_exclusion_visuals(slot)
             table.blockSignals(False)
             table.setUpdatesEnabled(True)
             table.viewport().setUpdatesEnabled(True)
@@ -6096,13 +6723,7 @@ class MainWindow(QMainWindow):
         raw_ids = cell.data(Qt.UserRole + 3)
         if not isinstance(raw_ids, list):
             return []
-        member_ids: List[int] = []
-        for value in raw_ids:
-            try:
-                member_ids.append(int(value))
-            except Exception:
-                continue
-        return member_ids
+        return self._dedupe_item_ids(raw_ids)
 
     def _grouped_slot_items(self, member_ids: List[int]) -> List[ItemRecord]:
         rows: List[ItemRecord] = []
@@ -6142,12 +6763,19 @@ class MainWindow(QMainWindow):
         if hasattr(item_list, "setUniformItemSizes"):
             item_list.setUniformItemSizes(True)
         item_list.setSelectionMode(QAbstractItemView.NoSelection)
+        item_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        item_list.customContextMenuRequested.connect(
+            lambda pos, s=slot, lst=item_list: self._on_grouped_items_context_menu(s, lst, pos)
+        )
+        excluded_ids = self._slot_excluded_item_id_set(slot)
         for item in items:
             label = f"[IL{int(item.ilvl or 0)}] {display_name_with_fallback(getattr(item, 'name_ja', None), item.name)}"
             list_item = QListWidgetItem(label)
+            list_item.setData(Qt.UserRole, int(item.item_id))
             icon = self._get_materia_icon(getattr(item, "icon_url", None))
             if icon:
                 list_item.setIcon(icon)
+            self._set_grouped_list_item_excluded_style(list_item, int(item.item_id) in excluded_ids)
             item_list.addItem(list_item)
         layout.addWidget(item_list)
 
@@ -6156,6 +6784,34 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         layout.addWidget(buttons)
         dialog.exec()
+
+    def _set_grouped_list_item_excluded_style(self, list_item: QListWidgetItem, excluded: bool) -> None:
+        font = list_item.font()
+        if font.strikeOut() != excluded:
+            font.setStrikeOut(excluded)
+            list_item.setFont(font)
+
+    def _on_grouped_items_context_menu(self, slot: str, item_list: QListWidget, pos) -> None:
+        item = item_list.itemAt(pos)
+        if not item:
+            return
+        raw_item_id = item.data(Qt.UserRole)
+        try:
+            item_id = int(raw_item_id or 0)
+        except Exception:
+            return
+        if item_id <= 0:
+            return
+        menu = QMenu(item_list)
+        action_search = menu.addAction("FF14公式DBで検索")
+        is_excluded = item_id in self._slot_excluded_item_id_set(slot)
+        action_exclude = menu.addAction("検索時除外を解除" if is_excluded else "検索時除外")
+        chosen = menu.exec(item_list.viewport().mapToGlobal(pos))
+        if chosen is action_search:
+            self._open_official_db_search_for_item(item_id)
+        elif chosen is action_exclude:
+            self._toggle_slot_item_exclusion(slot, [item_id], exclude=not is_excluded)
+            self._set_grouped_list_item_excluded_style(item, not is_excluded)
 
     def _table_min_height(self, table: QTableWidget, rows: int) -> int:
         header_h = table.horizontalHeader().height()
@@ -6173,6 +6829,33 @@ class MainWindow(QMainWindow):
             item.setText(text)
         else:
             table.setItem(row, col, QTableWidgetItem(text))
+
+    def _table_row_item_id(self, table: QTableWidget, row: int) -> Optional[int]:
+        cell = table.item(row, 0)
+        if not cell:
+            return None
+        raw_item_id = cell.data(Qt.UserRole)
+        try:
+            item_id = int(raw_item_id or 0)
+        except Exception:
+            return None
+        return item_id or None
+
+    def _open_official_db_search_for_item(self, item_id: int) -> None:
+        item = self.items_by_id.get(int(item_id))
+        if not item:
+            QMessageBox.warning(self, "検索不可", "装備情報を取得できませんでした。")
+            return
+        item_name = display_name_with_fallback(getattr(item, "name_ja", None), item.name)
+        if not item_name:
+            QMessageBox.warning(self, "検索不可", "装備名を取得できませんでした。")
+            return
+        search_url = (
+            "https://jp.finalfantasyxiv.com/lodestone/playguide/db/search/?q="
+            f"{quote_plus(item_name)}"
+        )
+        if not QDesktopServices.openUrl(QUrl(search_url)):
+            QMessageBox.warning(self, "起動失敗", "ブラウザで公式DBを開けませんでした。")
 
     def _level_sync_enabled(self) -> bool:
         return bool(hasattr(self, "chk_level_sync") and self.chk_level_sync.isChecked())
@@ -6197,9 +6880,6 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "level_sync_il"):
             return None
         return int(self.level_sync_il.value())
-
-    def _allow_duplicate_unique_rings(self) -> bool:
-        return self._level_sync_enabled()
 
     def on_level_sync_changed(self, *_args) -> None:
         enabled = self._level_sync_enabled()
@@ -6276,7 +6956,6 @@ class MainWindow(QMainWindow):
         selected_items: Dict[str, object] = {}
         no_meld_slots: set = set()
         seen_unique: set = set()
-        allow_duplicate_unique_rings = self._allow_duplicate_unique_rings()
         for slot, sel in gearset.items.items():
             if not sel or not sel.item_id:
                 continue
@@ -6284,15 +6963,9 @@ class MainWindow(QMainWindow):
             if not item:
                 continue
             item_id = int(getattr(item, "item_id", 0) or 0)
-            duplicate_unique_ring = (
-                allow_duplicate_unique_rings
-                and slot in {"ring1", "ring2"}
-                and str(getattr(item, "slot", "")) == "ring"
-                and bool(getattr(item, "unique", False))
-            )
-            if bool(getattr(item, "unique", False)) and item_id in seen_unique and not duplicate_unique_ring:
+            if bool(getattr(item, "unique", False)) and item_id in seen_unique:
                 continue
-            if bool(getattr(item, "unique", False)) and not duplicate_unique_ring:
+            if bool(getattr(item, "unique", False)):
                 seen_unique.add(item_id)
             effective_item, synced = self._apply_level_sync_to_item(item, gearset.job)
             selected_items[slot] = effective_item
@@ -6502,6 +7175,9 @@ class MainWindow(QMainWindow):
         candidates: Dict[str, List[ItemRecord]] = {}
         for slot, source in slot_sources:
             current_sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
+            excluded_ids = {
+                int(v) for v in list(getattr(current_sel, "excluded_item_ids", []) or []) if int(v or 0) > 0
+            }
             if bool(getattr(current_sel, "lock_item", False)):
                 locked_item = self.items_by_id.get(int(current_sel.item_id or 0)) if current_sel.item_id else None
                 if locked_item is None:
@@ -6531,6 +7207,8 @@ class MainWindow(QMainWindow):
                         member_ids = [item_id]
                 for item_id in member_ids:
                     if item_id in seen_ids:
+                        continue
+                    if item_id in excluded_ids:
                         continue
                     raw_item = self.items_by_id.get(item_id)
                     if not raw_item:
@@ -6605,6 +7283,7 @@ class MainWindow(QMainWindow):
                 target_sel = (cloned.items or {}).get(slot) or ItemSelection()
                 target_sel.lock_item = bool(getattr(active_sel, "lock_item", False))
                 target_sel.lock_materia = bool(getattr(active_sel, "lock_materia", False))
+                target_sel.excluded_item_ids = list(getattr(active_sel, "excluded_item_ids", []) or [])
                 if target_sel.lock_item:
                     previous_item_id = target_sel.item_id
                     target_sel.item_id = active_sel.item_id
@@ -6777,6 +7456,22 @@ class MainWindow(QMainWindow):
         self.current_gearset.level = self._effective_calc_level()
 
     def _compute_raw_stats_with_melds(self, gearset: Gearset) -> Tuple[Dict[int, int], Dict[str, object]]:
+        key_slots = []
+        for slot_name in GEAR_SLOTS:
+            sel = (gearset.items or {}).get(slot_name) or ItemSelection()
+            mats = tuple((m.base_param, m.grade) for m in (sel.materia or []))
+            key_slots.append((slot_name, int(sel.item_id or 0), mats))
+        cache_key = (
+            str(gearset.job or ""),
+            int(gearset.level or 0),
+            bool(self._level_sync_enabled()),
+            int(self._level_sync_il_value() or 0),
+            tuple(key_slots),
+        )
+        cached = self._raw_stats_cache.get(cache_key)
+        if cached is not None:
+            cached_stats, cached_items = cached
+            return dict(cached_stats), dict(cached_items)
         selected_items, no_meld_slots = self._resolved_selected_items(gearset)
         base_stats = optimizer.aggregate_base_stats(selected_items)
         combined_stats = base_stats.copy()
@@ -6800,6 +7495,9 @@ class MainWindow(QMainWindow):
                 if applied <= 0:
                     continue
                 combined_stats[stat_id] = combined_stats.get(stat_id, 0) + applied
+        if len(self._raw_stats_cache) >= 128:
+            self._raw_stats_cache.clear()
+        self._raw_stats_cache[cache_key] = (dict(combined_stats), dict(selected_items))
         return combined_stats, selected_items
 
     def _compute_stats_with_materia_and_food(self, gearset: Gearset, food) -> Tuple[Dict[int, int], Dict[str, object]]:
@@ -6848,6 +7546,7 @@ class MainWindow(QMainWindow):
             job=self.current_gearset.job,
         )
         if dialog.exec() == QDialog.Accepted:
+            self._clear_optimal_variant_tabs()
             sel.materia = dialog.result
             self.current_gearset.items[slot] = sel
             self._refresh_slot_selected_display(slot)
@@ -6996,7 +7695,6 @@ class MainWindow(QMainWindow):
                     party_synergies=party_synergies,
                     **eval_rate_adjust_kwargs,
                     mode=mode,
-                    allow_duplicate_unique_rings=self._allow_duplicate_unique_rings(),
                     progress=_search_progress,
                     stop_event=stop_event,
                     finalize_progress=False,
@@ -7039,14 +7737,13 @@ class MainWindow(QMainWindow):
                             party_synergies=party_synergies,
                             **eval_rate_adjust_kwargs,
                             mode=mode,
-                            allow_duplicate_unique_rings=self._allow_duplicate_unique_rings(),
                             progress=None,
                             stop_event=stop_event,
                             finalize_progress=False,
                         )
                         if not focused_results:
                             continue
-                        merged.extend(focused_results[:1])
+                        merged.extend(self._top_tied_optimized_results(focused_results, mode))
                         refined_gear = focused_results[0][0]
                         if progress:
                             progress(
@@ -7077,17 +7774,16 @@ class MainWindow(QMainWindow):
                         selected_items_override=seed_items,
                         no_meld_slots=seed_no_meld,
                         mode=mode,
-                        allow_duplicate_unique_rings=self._allow_duplicate_unique_rings(),
                         progress=None,
                         stop_event=stop_event,
                     )
                     if seed_results:
-                        merged.extend(seed_results[:1])
+                        merged.extend(self._top_tied_optimized_results(seed_results, mode))
                         if progress:
                             progress(95 + min(4, idx), f"既知装備を再評価中 {idx + 1}/{len(seed_candidates)}")
                 if progress:
                     progress(100, "装備検索を含む最適化が完了しました")
-                return self._dedupe_optimized_results(merged, limit=3)
+                return self._dedupe_optimized_results(merged, limit=8)
 
             self.start_worker(task, self._after_optimize)
             return
@@ -7117,7 +7813,6 @@ class MainWindow(QMainWindow):
                 selected_items_override=selected_items_for_opt,
                 no_meld_slots=no_meld_slots_opt,
                 mode=mode,
-                allow_duplicate_unique_rings=self._allow_duplicate_unique_rings(),
                 progress=progress,
                 stop_event=stop_event,
             )
@@ -7224,6 +7919,7 @@ class MainWindow(QMainWindow):
 
     def _after_optimize(self, results) -> None:
         if not results:
+            self._clear_optimal_variant_tabs()
             detail = ""
             if self._level_sync_enabled():
                 detail = "\nレベルシンク中は同期された装備のマテリアが無効になります。"
@@ -7235,17 +7931,33 @@ class MainWindow(QMainWindow):
         best = results[0][0]
         self._pending_saved_set_ui_context = self._capture_saved_set_ui_context(best.job)
         self._apply_gearset_to_ui(best)
+        variant_entries = self._build_optimal_variant_entries(list(results), mode)
         if self._last_optimize_used_gear_search:
             self.progress_label.setText("最適な装備セットを反映しました。")
         else:
             self.progress_label.setText("最適解を反映しました。")
         for slot in self.slot_tables.keys():
             self._refresh_slot_selected_display(slot)
-        expected_score = float(results[0][1])
-        current_eval = self._evaluate_current_gearset_scores(mode)
-        if current_eval is not None:
-            expected_score = float(current_eval[1])
-        self._apply_eval_result(mode, float(results[0][1]), float(results[0][2]), expected_score)
+        active_entry = variant_entries[0] if variant_entries else None
+        if active_entry is None:
+            expected_score = float(results[0][1])
+            current_eval = self._evaluate_current_gearset_scores(mode)
+            score_value = float(results[0][1])
+            gcd_value = float(results[0][2])
+            if current_eval is not None:
+                score_value = float(current_eval[0])
+                expected_score = float(current_eval[1])
+                gcd_value = float(current_eval[2])
+            self._apply_eval_result(mode, score_value, gcd_value, expected_score)
+            self._clear_optimal_variant_tabs()
+            return
+        self._apply_eval_result(
+            mode,
+            float(active_entry["score"]),
+            float(active_entry["gcd"]),
+            float(active_entry["expected_score"]),
+        )
+        self._set_optimal_variant_tabs(variant_entries, selected_index=0)
 
 
     def _materia_value(self, base_param: int, grade: int) -> int:
@@ -7259,10 +7971,13 @@ class MainWindow(QMainWindow):
         return 0
 
     def _get_job_mods(self, job: str) -> Dict[str, int]:
+        cached = self._job_mods_cache.get(job)
+        if cached is not None:
+            return dict(cached)
         rec = self.jobs_data.get(job)
         if not rec:
             return {}
-        return {
+        mods = {
             "strength": rec.modifier_strength,
             "dexterity": rec.modifier_dexterity,
             "intelligence": rec.modifier_intelligence,
@@ -7270,6 +7985,8 @@ class MainWindow(QMainWindow):
             "vitality": rec.modifier_vitality,
             "hp": rec.modifier_hp,
         }
+        self._job_mods_cache[job] = dict(mods)
+        return mods
 
     def closeEvent(self, event) -> None:
         data = load_auth()

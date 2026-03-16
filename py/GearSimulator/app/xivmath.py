@@ -335,14 +335,20 @@ def build_computed_stats(
     skillspeed = level_stats.base_sub + raw_stats.get(45, 0)
     spellspeed = level_stats.base_sub + raw_stats.get(46, 0)
 
+    # XIVGear applies food from pre-party, pre-food values. Keep those bases here.
     food_base = {
-        27: crit,
-        22: dhit,
-        44: det,
+        1: strength,
+        2: dexterity,
+        3: vitality,
+        4: intelligence,
+        5: mind,
+        6: piety,
         19: tenacity,
+        22: dhit,
+        27: crit,
+        44: det,
         45: skillspeed,
         46: spellspeed,
-        6: piety,
     }
 
     party = 1 + (party_bonus / 100)
@@ -377,7 +383,17 @@ def build_computed_stats(
             if base_val is None:
                 continue
             add = min(int(base_val * pct / 100), max_val)
-            if stat_id == 27:
+            if stat_id == 1:
+                strength += add
+            elif stat_id == 2:
+                dexterity += add
+            elif stat_id == 3:
+                vitality += add
+            elif stat_id == 4:
+                intelligence += add
+            elif stat_id == 5:
+                mind += add
+            elif stat_id == 27:
                 crit += add
             elif stat_id == 22:
                 dhit += add
