@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 from typing import Dict, Any
 
 from .paths import ensure_runtime_dirs, writable_config_dir
@@ -12,8 +14,28 @@ DEFAULT_SAVED_SETS: Dict[str, Any] = {"version": 1, "items": []}
 
 def _write_json(path, data: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=str(path.parent),
+            prefix=f"{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as f:
+            temp_path = f.name
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except Exception:
+                pass
 
 
 def ensure_config_files() -> None:

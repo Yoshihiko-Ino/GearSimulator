@@ -4,6 +4,7 @@ import json
 import os
 import time
 import re
+import uuid
 from urllib.parse import quote_plus
 from datetime import datetime
 from pathlib import Path
@@ -537,8 +538,8 @@ class MainWindow(QMainWindow):
         self._raw_stats_cache: Dict[Tuple, Tuple[Dict[int, int], Dict[str, object]]] = {}
         self._populate_queue: List[dict] = []
         self._is_populating: bool = False
-        self._pending_populate: Optional[Tuple[str, int, int]] = None
-        self._last_populate_key: Optional[Tuple[str, int, int]] = None
+        self._pending_populate: Optional[Tuple[object, ...]] = None
+        self._last_populate_key: Optional[Tuple[object, ...]] = None
         self._populate_immediate_mode: bool = False
         self._pending_score_after_populate: bool = False
         self._pending_score_after_worker: bool = False
@@ -571,6 +572,7 @@ class MainWindow(QMainWindow):
         self._simdps_baseline_race: Optional[str] = None
         self._pending_saved_set_entry: Optional[dict] = None
         self._pending_saved_set_ui_context: Optional[dict] = None
+        self._current_loaded_saved_set_id: Optional[int] = None
         self._auto_calc_timer = QTimer(self)
         self._auto_calc_timer.setSingleShot(True)
         self._auto_calc_timer.timeout.connect(self._update_score_preview)
@@ -594,13 +596,6 @@ class MainWindow(QMainWindow):
 
     def _disable_startup_busy_dialog(self) -> None:
         self._suppress_busy_dialog = False
-
-    def closeEvent(self, event) -> None:
-        try:
-            self._flush_saved_sets()
-        except Exception:
-            pass
-        super().closeEvent(event)
 
     # ---- UI construction ----
     def _build_ui(self) -> None:
@@ -971,6 +966,8 @@ class MainWindow(QMainWindow):
         self.saved_sets_table.itemSelectionChanged.connect(self.on_saved_set_selected)
         self.saved_sets_table.itemChanged.connect(self.on_saved_set_item_changed)
         self.saved_sets_table.cellClicked.connect(self.on_saved_set_cell_clicked)
+        self.saved_sets_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.saved_sets_table.customContextMenuRequested.connect(self.on_saved_set_context_menu)
         model = self.saved_sets_table.model()
         if model is not None:
             model.rowsAboutToBeMoved.connect(self._on_saved_sets_rows_about_to_move)
@@ -984,10 +981,6 @@ class MainWindow(QMainWindow):
         self.btn_save_set.clicked.connect(self.on_save_set_to_history)
         self.btn_import_xivgear_clipboard = QPushButton("jsonをｸﾘｯﾌﾟﾎﾞｰﾄﾞからｲﾝﾎﾟｰﾄ(XIVGear)")
         self.btn_import_xivgear_clipboard.clicked.connect(self.on_import_xivgear_clipboard)
-        self.btn_export_xivgear_clipboard = QPushButton("jsonをｸﾘｯﾌﾟﾎﾞｰﾄﾞにｴｸｽﾎﾟｰﾄ(XIVGear)")
-        self.btn_export_xivgear_clipboard.clicked.connect(self.on_export_xivgear_clipboard)
-        self.btn_delete_set = QPushButton("削除")
-        self.btn_delete_set.clicked.connect(self.on_delete_saved_set)
         self.party_synergy_checks = {}
         self.party_synergy_defs = [
             ("dnc", "踊"), ("brd", "詩"), ("drg", "竜"),
@@ -1020,9 +1013,7 @@ class MainWindow(QMainWindow):
         sync_line.addWidget(QLabel("評価モード"))
         sync_line.addWidget(self.calc_mode)
         sync_line.addWidget(self.btn_save_set)
-        sync_line.addWidget(self.btn_export_xivgear_clipboard)
         sync_line.addWidget(self.btn_import_xivgear_clipboard)
-        sync_line.addWidget(self.btn_delete_set)
         self._refresh_party_synergy_ui()
         top_controls = QVBoxLayout()
         top_controls.setContentsMargins(0, 0, 0, 0)
@@ -1276,8 +1267,21 @@ class MainWindow(QMainWindow):
     def on_worker_error(self, trace: str) -> None:
         self.active_worker = None
         self.btn_cancel.setEnabled(False)
-        self.progress_bar.setValue(0)
         QMessageBox.critical(self, "エラー", trace)
+        self.update_progress(0, "待機中")
+        if not self.active_worker:
+            self._start_saved_jobs_load()
+        if (not self.active_worker) and self._pending_phase_request:
+            report_code, fight = self._pending_phase_request
+            self._pending_phase_request = None
+            self._load_phases_for_fight(report_code, fight)
+        if (not self.active_worker) and self._pending_gearset and self._pending_gearset.job in self.items_by_job:
+            gear = self._pending_gearset
+            self._pending_gearset = None
+            self._apply_gearset_to_ui(gear)
+        if self._pending_score_after_worker:
+            self._pending_score_after_worker = False
+            self._schedule_auto_score_update()
 
     def on_cancel(self) -> None:
         if self.active_worker:
@@ -3105,6 +3109,60 @@ class MainWindow(QMainWindow):
             payload["ilvlSync"] = int(sync_ils[0])
         return payload, missing_materia
 
+    def _build_bisbuddy_export_payload(self, entry: dict) -> Tuple[Optional[dict], int]:
+        if not isinstance(entry, dict):
+            return None, 0
+        gear_data = entry.get("gearset")
+        if not isinstance(gear_data, dict):
+            return None, 0
+        gear = Gearset.from_dict(gear_data)
+        if not gear.job:
+            return None, 0
+        materia_lookup = self._xivgear_materia_export_lookup()
+        gearpieces: List[dict] = []
+        missing_materia = 0
+        for slot in GEAR_SLOTS:
+            sel = (gear.items or {}).get(slot)
+            if not sel or not sel.item_id:
+                continue
+            materia_blob: List[dict] = []
+            for meld in list(sel.materia or []):
+                try:
+                    key = (int(meld.base_param), int(meld.grade))
+                except Exception:
+                    continue
+                materia_item_id = materia_lookup.get(key)
+                if not materia_item_id:
+                    missing_materia += 1
+                    continue
+                materia_blob.append(
+                    {
+                        "ItemId": int(materia_item_id),
+                        "IsCollected": False,
+                        "CollectLock": False,
+                    }
+                )
+            gearpieces.append(
+                {
+                    "ItemId": int(sel.item_id),
+                    "IsCollected": False,
+                    "CollectLock": False,
+                    "ItemMateria": materia_blob,
+                }
+            )
+        if not gearpieces:
+            return None, missing_materia
+        payload = {
+            "Id": str(uuid.uuid4()),
+            "Name": str(entry.get("name") or "GearSimulator Set"),
+            "SourceType": 2,
+            "JobAbbrv": str(gear.job),
+            "IsActive": True,
+            "Priority": 0,
+            "Gearpieces": gearpieces,
+        }
+        return payload, missing_materia
+
     def _gearset_dedup_signature(self, gear: Gearset) -> str:
         payload = gear.to_dict()
         encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -3303,16 +3361,63 @@ class MainWindow(QMainWindow):
         if not entries:
             QMessageBox.warning(self, "対象なし", "保存セットの出力チェックを付けたものがありません。")
             return
-        payload, missing_materia = self._build_xivgear_export_payload(entries)
+        self._copy_xivgear_entries_to_clipboard(entries)
+
+    def _entry_with_current_gearset_for_export(self, entry: dict) -> dict:
+        if not isinstance(entry, dict):
+            return entry
+        entry_id = entry.get("id")
+        if entry_id is None or entry_id != self._current_loaded_saved_set_id:
+            return entry
+        merged = dict(entry)
+        merged["gearset"] = self.current_gearset.to_dict()
+        merged["food_id"] = self.current_gearset.food_id
+        merged["party_bonus"] = self.party_bonus.value()
+        merged["ui_context"] = self._capture_saved_set_ui_context(self.current_gearset.job)
+        return merged
+
+    def _copy_xivgear_entries_to_clipboard(self, entries: List[dict]) -> bool:
+        if not entries:
+            QMessageBox.warning(self, "対象なし", "出力対象の保存セットがありません。")
+            return False
+        export_entries = [self._entry_with_current_gearset_for_export(entry) for entry in entries]
+        payload, missing_materia = self._build_xivgear_export_payload(export_entries)
         if not payload:
             QMessageBox.warning(self, "出力不可", "XIVGear形式で出力できる保存セットがありませんでした。")
+            return False
+        clipboard = QApplication.clipboard()
+        if clipboard is None:
+            QMessageBox.warning(self, "コピー失敗", "クリップボードを取得できませんでした。")
+            return False
+        clipboard.setText(json.dumps(payload, ensure_ascii=False, indent=2))
+        message = f"{len(payload.get('sets') or [])}件の保存セットをXIVGear JSONとしてコピーしました。"
+        if missing_materia > 0:
+            message += f" マテリア {missing_materia}件は省略しました。"
+        self.progress_label.setText(message)
+        QMessageBox.information(self, "コピー完了", message)
+        return True
+
+    def on_export_bisbuddy_clipboard(self, entry: Optional[dict] = None) -> None:
+        target = entry
+        if not isinstance(target, dict):
+            row = self.saved_sets_table.currentRow() if hasattr(self, "saved_sets_table") else -1
+            if row >= 0 and hasattr(self, "saved_sets_table"):
+                item = self.saved_sets_table.item(row, SAVED_COL_NAME)
+                target = item.data(Qt.UserRole) if item else None
+        if not isinstance(target, dict):
+            QMessageBox.warning(self, "対象なし", "保存セットが選択されていません。")
+            return
+        target = self._entry_with_current_gearset_for_export(target)
+        payload, missing_materia = self._build_bisbuddy_export_payload(target)
+        if not payload:
+            QMessageBox.warning(self, "出力不可", "BisBuddy 形式で出力できる保存セットではありません。")
             return
         clipboard = QApplication.clipboard()
         if clipboard is None:
             QMessageBox.warning(self, "コピー失敗", "クリップボードを取得できませんでした。")
             return
         clipboard.setText(json.dumps(payload, ensure_ascii=False, indent=2))
-        message = f"{len(payload.get('sets') or [])}件の保存セットをXIVGear JSONとしてコピーしました。"
+        message = "BisBuddy JSONとしてコピーしました。"
         if missing_materia > 0:
             message += f" マテリア {missing_materia}件は省略しました。"
         self.progress_label.setText(message)
@@ -3378,9 +3483,47 @@ class MainWindow(QMainWindow):
         res = QMessageBox.question(self, "削除", "選択中の保存セットを削除しますか？", QMessageBox.Yes | QMessageBox.No)
         if res != QMessageBox.Yes:
             return
+        if entry.get("id") == self._current_loaded_saved_set_id:
+            self._current_loaded_saved_set_id = None
         self.saved_sets = [e for e in self.saved_sets if e.get("id") != entry.get("id")]
         self._schedule_saved_sets_flush(immediate=True)
         self._refresh_saved_sets_table()
+
+    def on_saved_set_context_menu(self, pos) -> None:
+        if self._updating_saved_table or self._saved_sets_reordering:
+            return
+        table = self.saved_sets_table
+        item = table.itemAt(pos)
+        if not item:
+            return
+        row = item.row()
+        if row < 0:
+            return
+        if table.currentRow() != row:
+            blocker = QSignalBlocker(table)
+            table.setCurrentCell(row, SAVED_COL_NAME)
+        entry_item = table.item(row, SAVED_COL_NAME)
+        entry = entry_item.data(Qt.UserRole) if entry_item else None
+        if not isinstance(entry, dict):
+            return
+        menu = QMenu(table)
+        checked_entries = self._checked_saved_set_entries()
+        action_xivgear_export = menu.addAction("XIVGear ｴｸｽﾎﾟｰﾄ")
+        action_xivgear_export_checked = None
+        if checked_entries:
+            action_xivgear_export_checked = menu.addAction("XIVGear ｴｸｽﾎﾟｰﾄ(ﾁｪｯｸ済み)")
+        action_bisbuddy_export = menu.addAction("BisBuddy ｴｸｽﾎﾟｰﾄ")
+        menu.addSeparator()
+        action_delete = menu.addAction("削除")
+        chosen = menu.exec(table.viewport().mapToGlobal(pos))
+        if chosen is action_xivgear_export:
+            self._copy_xivgear_entries_to_clipboard([entry])
+        elif action_xivgear_export_checked is not None and chosen is action_xivgear_export_checked:
+            self._copy_xivgear_entries_to_clipboard(checked_entries)
+        elif chosen is action_bisbuddy_export:
+            self.on_export_bisbuddy_clipboard(entry)
+        elif chosen is action_delete:
+            self.on_delete_saved_set()
 
     def on_saved_set_selected(self) -> None:
         if self._saved_sets_reordering or self._updating_saved_table:
@@ -3400,11 +3543,11 @@ class MainWindow(QMainWindow):
         restored_ui_context = self._saved_set_ui_context(entry, gear)
         self._pending_saved_set_ui_context = restored_ui_context
         self._persist_saved_set_ui_context(entry, restored_ui_context)
+        self._current_loaded_saved_set_id = entry.get("id")
         self._apply_gearset_to_ui(gear)
         self.last_eval = None
         if hasattr(self, "calc_result_label_left"):
             self.calc_result_label_left.setText("計算結果: 更新中...")
-        self.on_save_auth(silent=True)
         self._schedule_auto_score_update()
 
     def on_saved_set_item_changed(self, item: QTableWidgetItem) -> None:
@@ -6469,7 +6612,14 @@ class MainWindow(QMainWindow):
     def populate_items(self, job: str, immediate: bool = False) -> None:
         il_min = self.item_il_min.value()
         il_max = self.item_il_max.value()
-        key = (job, il_min, il_max)
+        key = (
+            job,
+            il_min,
+            il_max,
+            bool(self._level_sync_enabled()),
+            int(self._level_sync_il_value() or 0),
+            int(self._selected_sync_level_value() or 0),
+        )
         if self._is_populating:
             self._pending_populate = key
             return
@@ -6600,7 +6750,10 @@ class MainWindow(QMainWindow):
                 self._pending_score_after_populate = False
                 self._schedule_auto_score_update()
             if self._pending_populate:
-                job, il_min, il_max = self._pending_populate
+                pending = self._pending_populate
+                job = pending[0] if len(pending) >= 1 else None
+                il_min = int(pending[1]) if len(pending) >= 3 else self.item_il_min.value()
+                il_max = int(pending[2]) if len(pending) >= 3 else self.item_il_max.value()
                 self.item_il_min.blockSignals(True)
                 self.item_il_max.blockSignals(True)
                 try:
@@ -6610,7 +6763,8 @@ class MainWindow(QMainWindow):
                     self.item_il_min.blockSignals(False)
                     self.item_il_max.blockSignals(False)
                 self._pending_populate = None
-                self.populate_items(job, immediate=self._populate_immediate_mode)
+                if job:
+                    self.populate_items(str(job), immediate=self._populate_immediate_mode)
             return
 
         entry = self._populate_queue[0]
@@ -6743,6 +6897,44 @@ class MainWindow(QMainWindow):
         )
         return rows
 
+    def _apply_grouped_slot_item_choice(self, slot: str, item_id: int) -> bool:
+        try:
+            resolved_item_id = int(item_id or 0)
+        except Exception:
+            return False
+        if resolved_item_id <= 0:
+            return False
+        item = self.items_by_id.get(resolved_item_id)
+        if not item:
+            return False
+        duplicate_slot = self._duplicate_unique_ring_slot(slot, resolved_item_id)
+        if duplicate_slot is not None:
+            other_label = SLOT_LABELS.get(duplicate_slot, duplicate_slot)
+            QMessageBox.information(
+                self,
+                "ユニーク装備",
+                f"この装備は unique のため、{other_label} と重複して設定できません。",
+            )
+            return False
+        sel = self.current_gearset.items.get(slot) or ItemSelection()
+        if int(sel.item_id or 0) == resolved_item_id:
+            table = self.slot_tables.get(slot)
+            if table:
+                self._select_table_row(table, resolved_item_id)
+            return True
+        sel.item_id = resolved_item_id
+        sel.materia = []
+        self.current_gearset.items[slot] = sel
+        table = self.slot_tables.get(slot)
+        if table:
+            self._select_table_row(table, resolved_item_id)
+        self._refresh_slot_selected_display(slot)
+        self._persist_current_gearset_to_selected_saved_set()
+        self.progress_label.setText(
+            f"{SLOT_LABELS.get(slot, slot)} のエクスポート用装備を更新しました。"
+        )
+        return True
+
     def _show_grouped_slot_items_dialog(self, slot: str, member_ids: List[int]) -> None:
         items = self._grouped_slot_items(member_ids)
         if not items:
@@ -6755,6 +6947,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         info_label = QLabel(
             f"この行には {len(items)} 件の装備が含まれます。表示中のサブステと枠は、レベルシンク後の共通値です。"
+            " 一覧から選んだ装備がエクスポート時に使われます。"
         )
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
@@ -6762,12 +6955,15 @@ class MainWindow(QMainWindow):
         item_list = QListWidget(dialog)
         if hasattr(item_list, "setUniformItemSizes"):
             item_list.setUniformItemSizes(True)
-        item_list.setSelectionMode(QAbstractItemView.NoSelection)
+        item_list.setSelectionMode(QAbstractItemView.SingleSelection)
         item_list.setContextMenuPolicy(Qt.CustomContextMenu)
         item_list.customContextMenuRequested.connect(
             lambda pos, s=slot, lst=item_list: self._on_grouped_items_context_menu(s, lst, pos)
         )
         excluded_ids = self._slot_excluded_item_id_set(slot)
+        current_sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
+        current_item_id = int(current_sel.item_id or 0) if current_sel.item_id else 0
+        current_row = -1
         for item in items:
             label = f"[IL{int(item.ilvl or 0)}] {display_name_with_fallback(getattr(item, 'name_ja', None), item.name)}"
             list_item = QListWidgetItem(label)
@@ -6777,9 +6973,31 @@ class MainWindow(QMainWindow):
                 list_item.setIcon(icon)
             self._set_grouped_list_item_excluded_style(list_item, int(item.item_id) in excluded_ids)
             item_list.addItem(list_item)
+            if current_row < 0 and int(item.item_id) == current_item_id:
+                current_row = item_list.count() - 1
+        if current_row < 0 and item_list.count() > 0:
+            current_row = 0
+        if current_row >= 0:
+            item_list.setCurrentRow(current_row)
+        item_list.itemDoubleClicked.connect(
+            lambda list_item, s=slot, dlg=dialog: (
+                self._apply_grouped_slot_item_choice(s, int(list_item.data(Qt.UserRole) or 0))
+                and dlg.accept()
+            )
+        )
         layout.addWidget(item_list)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Close, parent=dialog)
+        btn_use = buttons.addButton("この装備を使用", QDialogButtonBox.ActionRole)
+        btn_use.clicked.connect(
+            lambda _checked=False, s=slot, lst=item_list, dlg=dialog: (
+                self._apply_grouped_slot_item_choice(
+                    s,
+                    int((lst.currentItem().data(Qt.UserRole) if lst.currentItem() else 0) or 0),
+                )
+                and dlg.accept()
+            )
+        )
         buttons.rejected.connect(dialog.reject)
         buttons.accepted.connect(dialog.accept)
         layout.addWidget(buttons)
@@ -6803,11 +7021,15 @@ class MainWindow(QMainWindow):
         if item_id <= 0:
             return
         menu = QMenu(item_list)
+        action_use = menu.addAction("この装備を使用")
         action_search = menu.addAction("FF14公式DBで検索")
         is_excluded = item_id in self._slot_excluded_item_id_set(slot)
         action_exclude = menu.addAction("検索時除外を解除" if is_excluded else "検索時除外")
         chosen = menu.exec(item_list.viewport().mapToGlobal(pos))
-        if chosen is action_search:
+        if chosen is action_use:
+            if self._apply_grouped_slot_item_choice(slot, item_id):
+                item_list.setCurrentItem(item)
+        elif chosen is action_search:
             self._open_official_db_search_for_item(item_id)
         elif chosen is action_exclude:
             self._toggle_slot_item_exclusion(slot, [item_id], exclude=not is_excluded)
@@ -7989,6 +8211,10 @@ class MainWindow(QMainWindow):
         return mods
 
     def closeEvent(self, event) -> None:
+        try:
+            self._flush_saved_sets()
+        except Exception:
+            pass
         data = load_auth()
         data["ui_state"] = self._collect_ui_state()
         save_auth(data)

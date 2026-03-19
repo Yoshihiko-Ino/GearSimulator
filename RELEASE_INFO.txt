@@ -1,5 +1,5 @@
 GearSimulator Release
-Version: 1.0.6
+Version: 1.0.7
 
 Folders:
 - py/GearSimulator : Python 版配布ファイル
