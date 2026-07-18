@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Iterable, Optional
 
 import httpx
@@ -10,6 +13,7 @@ from .models import ActionRecord, StatusEffectRecord
 
 
 BASE_URL = "https://xivapi.com"
+logger = logging.getLogger(__name__)
 
 
 class XivApiClient:
@@ -18,130 +22,198 @@ class XivApiClient:
         self._client = httpx.Client(
             base_url=BASE_URL,
             timeout=30,
-            headers={"User-Agent": "GearSimulator/1.0"},
+            headers={"User-Agent": "GearSimulator/2.0.0"},
         )
+        self._cache_lock = threading.RLock()
         self._action_cache: Dict[int, ActionRecord] = {}
         self._status_cache: Dict[int, StatusEffectRecord] = {}
         self._load_cache()
 
+    @staticmethod
+    def _fetch_worker_count(total: int) -> int:
+        return max(1, min(6, int(total)))
+
     def _load_cache(self) -> None:
         cached = self.cache.load("xivapi_actions.json") or {}
+        if not isinstance(cached, dict):
+            logger.warning("Ignoring invalid XIVAPI action cache root: %s", type(cached).__name__)
+            cached = {}
         for k, v in cached.items():
+            if not isinstance(v, dict):
+                continue
             try:
                 action_id = int(k)
-            except Exception:
+                action = ActionRecord(
+                    action_id=action_id,
+                    name=str(v.get("name", "") or ""),
+                    name_ja=v.get("name_ja"),
+                    potency=v.get("potency"),
+                    dot_potency=v.get("dot_potency"),
+                    attack_type=v.get("attack_type"),
+                )
+            except (TypeError, ValueError):
                 continue
-            self._action_cache[action_id] = ActionRecord(
-                action_id=action_id,
-                name=v.get("name", ""),
-                name_ja=v.get("name_ja"),
-                potency=v.get("potency"),
-                dot_potency=v.get("dot_potency"),
-                attack_type=v.get("attack_type"),
-            )
+            self._action_cache[action_id] = action
         status_cached = self.cache.load("xivapi_statuses.json") or {}
+        if not isinstance(status_cached, dict):
+            logger.warning("Ignoring invalid XIVAPI status cache root: %s", type(status_cached).__name__)
+            status_cached = {}
         for k, v in status_cached.items():
+            if not isinstance(v, dict):
+                continue
             try:
                 status_id = int(k)
-            except Exception:
+                status = StatusEffectRecord(
+                    status_id=status_id,
+                    name=str(v.get("name", "") or ""),
+                    name_ja=v.get("name_ja"),
+                    damage_up=float(v.get("damage_up", 0.0)),
+                    crit_rate_up=float(v.get("crit_rate_up", 0.0)),
+                    dhit_rate_up=float(v.get("dhit_rate_up", 0.0)),
+                    force_crit=bool(v.get("force_crit", False)),
+                    force_dhit=bool(v.get("force_dhit", False)),
+                    dot_effect=bool(v.get("dot_effect", False)),
+                )
+            except (TypeError, ValueError):
                 continue
-            self._status_cache[status_id] = StatusEffectRecord(
-                status_id=status_id,
-                name=v.get("name", ""),
-                name_ja=v.get("name_ja"),
-                damage_up=float(v.get("damage_up", 0.0)),
-                crit_rate_up=float(v.get("crit_rate_up", 0.0)),
-                dhit_rate_up=float(v.get("dhit_rate_up", 0.0)),
-                force_crit=bool(v.get("force_crit", False)),
-                force_dhit=bool(v.get("force_dhit", False)),
-                dot_effect=bool(v.get("dot_effect", False)),
-            )
+            self._status_cache[status_id] = status
 
     def _save_cache(self) -> None:
-        payload = {
-            str(k): {
-                "name": v.name,
-                "name_ja": v.name_ja,
-                "potency": v.potency,
-                "dot_potency": v.dot_potency,
-                "attack_type": v.attack_type,
+        with self._cache_lock:
+            payload = {
+                str(k): {
+                    "name": v.name,
+                    "name_ja": v.name_ja,
+                    "potency": v.potency,
+                    "dot_potency": v.dot_potency,
+                    "attack_type": v.attack_type,
+                }
+                for k, v in self._action_cache.items()
             }
-            for k, v in self._action_cache.items()
-        }
-        self.cache.save("xivapi_actions.json", payload)
-        status_payload = {
-            str(k): {
-                "name": v.name,
-                "name_ja": v.name_ja,
-                "damage_up": v.damage_up,
-                "crit_rate_up": v.crit_rate_up,
-                "dhit_rate_up": v.dhit_rate_up,
-                "force_crit": v.force_crit,
-                "force_dhit": v.force_dhit,
-                "dot_effect": v.dot_effect,
+            status_payload = {
+                str(k): {
+                    "name": v.name,
+                    "name_ja": v.name_ja,
+                    "damage_up": v.damage_up,
+                    "crit_rate_up": v.crit_rate_up,
+                    "dhit_rate_up": v.dhit_rate_up,
+                    "force_crit": v.force_crit,
+                    "force_dhit": v.force_dhit,
+                    "dot_effect": v.dot_effect,
+                }
+                for k, v in self._status_cache.items()
             }
-            for k, v in self._status_cache.items()
-        }
-        self.cache.save("xivapi_statuses.json", status_payload)
+            self.cache.save("xivapi_actions.json", payload)
+            self.cache.save("xivapi_statuses.json", status_payload)
+
+    def close(self) -> None:
+        self._client.close()
 
     def get_cached_action(self, action_id: int) -> Optional[ActionRecord]:
-        return self._action_cache.get(action_id)
+        with self._cache_lock:
+            return self._action_cache.get(action_id)
 
     def fetch_actions(self, action_ids: Iterable[int]) -> Dict[int, ActionRecord]:
         updated = False
         result: Dict[int, ActionRecord] = {}
+        missing_ids = []
         for action_id in sorted({int(a) for a in action_ids if a}):
-            if action_id in self._action_cache:
-                result[action_id] = self._action_cache[action_id]
+            with self._cache_lock:
+                cached_action = self._action_cache.get(action_id)
+            if cached_action is not None:
+                result[action_id] = cached_action
                 continue
-            action = self._fetch_action(action_id)
-            if action:
-                self._action_cache[action_id] = action
-                result[action_id] = action
-                updated = True
+            missing_ids.append(action_id)
+        if missing_ids:
+            worker_count = self._fetch_worker_count(len(missing_ids))
+            if worker_count == 1:
+                fetched_pairs = ((action_id, self._fetch_action(action_id)) for action_id in missing_ids)
+            else:
+                with ThreadPoolExecutor(max_workers=worker_count) as ex:
+                    future_map = {
+                        ex.submit(self._fetch_action, action_id): action_id
+                        for action_id in missing_ids
+                    }
+                    fetched_pairs = (
+                        (future_map[fut], fut.result())
+                        for fut in as_completed(future_map)
+                    )
+            for action_id, action in fetched_pairs:
+                if action:
+                    with self._cache_lock:
+                        self._action_cache[action_id] = action
+                    result[action_id] = action
+                    updated = True
         if updated:
             self._save_cache()
         return result
 
     def get_cached_status(self, status_id: int) -> Optional[StatusEffectRecord]:
-        return self._status_cache.get(status_id)
+        with self._cache_lock:
+            return self._status_cache.get(status_id)
 
     def fetch_statuses(self, status_ids: Iterable[int]) -> Dict[int, StatusEffectRecord]:
         updated = False
         result: Dict[int, StatusEffectRecord] = {}
+        missing_statuses = []
         for raw_status_id in sorted({int(s) for s in status_ids if s}):
             status_id = _normalize_status_id(raw_status_id)
-            cached = self._status_cache.get(raw_status_id) or self._status_cache.get(status_id)
+            with self._cache_lock:
+                cached = self._status_cache.get(raw_status_id) or self._status_cache.get(status_id)
             if cached is not None:
                 if raw_status_id >= 1_000_000 and not _record_has_effect(cached):
                     refreshed = self._fetch_status(status_id)
                     if refreshed is not None:
                         cached = refreshed
-                        self._status_cache[status_id] = refreshed
-                        self._status_cache[raw_status_id] = refreshed
+                        with self._cache_lock:
+                            self._status_cache[status_id] = refreshed
+                            self._status_cache[raw_status_id] = refreshed
                         updated = True
                 result[raw_status_id] = cached
                 # Keep a direct mapping for the FFLogs raw ID (100xxxx).
-                if raw_status_id not in self._status_cache:
-                    self._status_cache[raw_status_id] = cached
-                    updated = True
+                with self._cache_lock:
+                    if raw_status_id not in self._status_cache:
+                        self._status_cache[raw_status_id] = cached
+                        updated = True
                 continue
-            status = self._fetch_status(status_id)
-            if status is None and status_id != raw_status_id:
-                # Fallback for IDs that are not offset.
-                status = self._fetch_status(raw_status_id)
-            if status is None:
-                status = self._fetch_status_from_action(status_id)
-            if status is None and status_id != raw_status_id:
-                status = self._fetch_status_from_action(raw_status_id)
-            if status:
-                self._status_cache[status_id] = status
-                self._status_cache[raw_status_id] = status
-                result[raw_status_id] = status
-                updated = True
+            missing_statuses.append((raw_status_id, status_id))
+        if missing_statuses:
+            worker_count = self._fetch_worker_count(len(missing_statuses))
+            if worker_count == 1:
+                fetched_pairs = (
+                    ((raw_status_id, status_id), self._fetch_status_chain(raw_status_id, status_id))
+                    for raw_status_id, status_id in missing_statuses
+                )
+            else:
+                with ThreadPoolExecutor(max_workers=worker_count) as ex:
+                    future_map = {
+                        ex.submit(self._fetch_status_chain, raw_status_id, status_id): (raw_status_id, status_id)
+                        for raw_status_id, status_id in missing_statuses
+                    }
+                    fetched_pairs = (
+                        (future_map[fut], fut.result())
+                        for fut in as_completed(future_map)
+                    )
+            for (raw_status_id, status_id), status in fetched_pairs:
+                if status:
+                    with self._cache_lock:
+                        self._status_cache[status_id] = status
+                        self._status_cache[raw_status_id] = status
+                    result[raw_status_id] = status
+                    updated = True
         if updated:
             self._save_cache()
         return result
+
+    def _fetch_status_chain(self, raw_status_id: int, status_id: int) -> Optional[StatusEffectRecord]:
+        status = self._fetch_status(status_id)
+        if status is None and status_id != raw_status_id:
+            status = self._fetch_status(raw_status_id)
+        if status is None:
+            status = self._fetch_status_from_action(status_id)
+        if status is None and status_id != raw_status_id:
+            status = self._fetch_status_from_action(raw_status_id)
+        return status
 
     def _fetch_action(self, action_id: int) -> Optional[ActionRecord]:
         try:
@@ -153,7 +225,8 @@ class XivApiClient:
                 },
             )
             resp.raise_for_status()
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to fetch XIVAPI action %s: %s", action_id, exc)
             return None
         data = resp.json()
         name = data.get("Name") or ""
@@ -187,7 +260,8 @@ class XivApiClient:
                 },
             )
             resp.raise_for_status()
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to fetch XIVAPI status %s: %s", status_id, exc)
             return None
         data = resp.json()
         name = data.get("Name") or ""
@@ -220,7 +294,8 @@ class XivApiClient:
                 },
             )
             resp.raise_for_status()
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to fetch XIVAPI action fallback %s: %s", action_id, exc)
             return None
         data = resp.json()
         name = data.get("Name") or ""

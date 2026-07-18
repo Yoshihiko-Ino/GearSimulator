@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import httpx
+import logging
 from typing import Dict, List, Optional, Callable
 
 from .cache import FileCache
@@ -16,6 +17,7 @@ from .models import (
 
 BASE_URL = "https://data.xivgear.app"
 COMBAT_FOOD_BONUS_STATS = {1, 2, 3, 4, 5, 6, 19, 22, 27, 44, 45, 46}
+logger = logging.getLogger(__name__)
 
 
 def _has_combat_food_bonus(bonuses: Dict[int, FoodBonus]) -> bool:
@@ -33,22 +35,42 @@ class XivGearClient:
         self.cache = cache
         self._client = httpx.Client(base_url=BASE_URL, timeout=30)
 
+    def close(self) -> None:
+        self._client.close()
+
+    def _load_dict_cache(self, cache_key: str) -> Optional[dict]:
+        cached = self.cache.load(cache_key)
+        if cached is not None and not isinstance(cached, dict):
+            logger.warning("Ignoring invalid cache root for %s: %s", cache_key, type(cached).__name__)
+            return None
+        return cached
+
+    def _load_list_cache(self, cache_key: str) -> Optional[list]:
+        cached = self.cache.load(cache_key)
+        if cached is not None and not isinstance(cached, list):
+            logger.warning("Ignoring invalid cache root for %s: %s", cache_key, type(cached).__name__)
+            return None
+        return cached
+
     def fetch_base_params(
         self, force: bool = False
     ) -> Dict[int, BaseParamRecord]:
         cache_key = "base_params.json"
         if not force:
-            cached = self.cache.load(cache_key)
+            cached = self._load_dict_cache(cache_key)
             if cached:
-                if all(isinstance(v, dict) and "meld_param" in v for v in cached.values()):
-                    return {
-                        int(k): BaseParamRecord(
-                            name=v.get("name", ""),
-                            meld_param=v.get("meld_param", []),
-                            slots=v.get("slots", {}),
-                        )
-                        for k, v in cached.items()
-                    }
+                try:
+                    if all(isinstance(v, dict) and "meld_param" in v for v in cached.values()):
+                        return {
+                            int(k): BaseParamRecord(
+                                name=v.get("name", ""),
+                                meld_param=v.get("meld_param", []),
+                                slots=v.get("slots", {}),
+                            )
+                            for k, v in cached.items()
+                        }
+                except (TypeError, ValueError):
+                    logger.warning("Ignoring invalid cache entries for %s", cache_key)
 
         resp = self._client.get("/BaseParams")
         resp.raise_for_status()
@@ -93,9 +115,13 @@ class XivGearClient:
     def fetch_item_levels(self, force: bool = False) -> Dict[int, dict]:
         cache_key = "item_levels.json"
         if not force:
-            cached = self.cache.load(cache_key)
+            cached = self._load_dict_cache(cache_key)
             if cached:
-                return {int(k): v for k, v in cached.items()}
+                try:
+                    if all(isinstance(v, dict) for v in cached.values()):
+                        return {int(k): v for k, v in cached.items()}
+                except (TypeError, ValueError):
+                    logger.warning("Ignoring invalid cache entries for %s", cache_key)
         resp = self._client.get("/ItemLevel")
         resp.raise_for_status()
         items = resp.json().get("items", []) or []
@@ -114,16 +140,21 @@ class XivGearClient:
     ) -> Dict[int, MateriaCategory]:
         cache_key = "materia.json"
         if not force:
-            cached = self.cache.load(cache_key)
+            cached = self._load_dict_cache(cache_key)
             if cached:
-                # refetch if cache lacks japanese names
-                if any(
-                    any(("name_ja" not in g or "item_ilvl" not in g) for g in grades)
-                    for grades in cached.values()
-                ):
-                    cached = None
-                else:
-                    return self._deserialize_materia(cached)
+                try:
+                    valid_shape = all(
+                        isinstance(grades, list) and all(isinstance(g, dict) for g in grades)
+                        for grades in cached.values()
+                    )
+                    needs_refresh = not valid_shape or any(
+                        any(("name_ja" not in g or "item_ilvl" not in g) for g in grades)
+                        for grades in cached.values()
+                    )
+                    if not needs_refresh:
+                        return self._deserialize_materia(cached)
+                except (KeyError, TypeError, ValueError):
+                    logger.warning("Ignoring invalid cache entries for %s", cache_key)
 
         resp = self._client.get("/Materia")
         resp.raise_for_status()
@@ -181,24 +212,25 @@ class XivGearClient:
     def fetch_food(self, force: bool = False) -> List[FoodRecord]:
         cache_key = "food.json"
         if not force:
-            cached = self.cache.load(cache_key)
+            cached = self._load_list_cache(cache_key)
             if cached:
-                # If cache lacks new fields, refetch
-                if any(
-                    (
-                        "name_ja" not in entry
+                try:
+                    # If cache lacks new fields, refetch
+                    needs_refresh = any(
+                        not isinstance(entry, dict)
+                        or "name_ja" not in entry
                         or "level_item" not in entry
                         or "source_row_id" not in entry
+                        for entry in cached
                     )
-                    for entry in cached
-                ):
-                    cached = None
-                else:
-                    foods = self._deserialize_food(cached)
-                    # Normalize old cache by dropping non-combat foods.
-                    if len(foods) != len(cached):
-                        self.cache.save(cache_key, self._serialize_food(foods))
-                    return foods
+                    if not needs_refresh:
+                        foods = self._deserialize_food(cached)
+                        # Normalize old cache by dropping non-combat foods.
+                        if len(foods) != len(cached):
+                            self.cache.save(cache_key, self._serialize_food(foods))
+                        return foods
+                except (KeyError, TypeError, ValueError):
+                    logger.warning("Ignoring invalid cache entries for %s", cache_key)
 
         resp = self._client.get("/Food")
         resp.raise_for_status()
@@ -242,20 +274,22 @@ class XivGearClient:
     def fetch_jobs(self, force: bool = False) -> Dict[str, JobRecord]:
         cache_key = "jobs.json"
         if not force:
-            cached = self.cache.load(cache_key)
+            cached = self._load_dict_cache(cache_key)
             if cached:
-                return {
-                    key: JobRecord(
-                        abbreviation=key,
-                        modifier_strength=val.get("modifier_strength", 100),
-                        modifier_dexterity=val.get("modifier_dexterity", 100),
-                        modifier_intelligence=val.get("modifier_intelligence", 100),
-                        modifier_mind=val.get("modifier_mind", 100),
-                        modifier_vitality=val.get("modifier_vitality", 100),
-                        modifier_hp=val.get("modifier_hp", 100),
-                    )
-                    for key, val in cached.items()
-                }
+                if all(isinstance(val, dict) for val in cached.values()):
+                    return {
+                        str(key): JobRecord(
+                            abbreviation=str(key),
+                            modifier_strength=val.get("modifier_strength", 100),
+                            modifier_dexterity=val.get("modifier_dexterity", 100),
+                            modifier_intelligence=val.get("modifier_intelligence", 100),
+                            modifier_mind=val.get("modifier_mind", 100),
+                            modifier_vitality=val.get("modifier_vitality", 100),
+                            modifier_hp=val.get("modifier_hp", 100),
+                        )
+                        for key, val in cached.items()
+                    }
+                logger.warning("Ignoring invalid cache entries for %s", cache_key)
 
         resp = self._client.get("/Jobs")
         resp.raise_for_status()
@@ -299,28 +333,27 @@ class XivGearClient:
         jobs_sorted = sorted(set(jobs))
         cache_key = f"items_{'_'.join(jobs_sorted)}.json"
         if not force:
-            cached = self.cache.load(cache_key)
+            cached = self._load_list_cache(cache_key)
             if cached:
-                # If cache lacks Japanese names or damage values, refetch
-                if any(
-                    (
-                        "name_ja" not in entry
+                try:
+                    # If cache lacks Japanese names or damage values, refetch
+                    needs_refresh = any(
+                        not isinstance(entry, dict)
+                        or "name_ja" not in entry
                         or "damage_phys" not in entry
                         or "delay_ms" not in entry
                         or "occ_slot" not in entry
                         or "icon_url" not in entry
+                        for entry in cached
                     )
-                    for entry in cached
-                ):
-                    cached = None
-                else:
-                    return self._deserialize_items(cached)
+                    if not needs_refresh:
+                        return self._deserialize_items(cached)
+                except (KeyError, TypeError, ValueError):
+                    logger.warning("Ignoring invalid cache entries for %s", cache_key)
 
         if progress:
             progress(5, f"{', '.join(jobs_sorted)} の装備を取得中")
-        params = []
-        for job in jobs_sorted:
-            params.append(("job", job))
+        params = [("job", job) for job in jobs_sorted]
         resp = self._client.get("/Items", params=params)
         resp.raise_for_status()
         raw_items = resp.json().get("items", [])
@@ -454,29 +487,27 @@ class XivGearClient:
         ]
 
     def _deserialize_items(self, cached: list) -> List[ItemRecord]:
-        items: List[ItemRecord] = []
-        for entry in cached:
-            items.append(
-                ItemRecord(
-                    item_id=entry["item_id"],
-                    name=entry["name"],
-                    name_ja=entry.get("name_ja"),
-                    jobs=entry.get("jobs", []),
-                    ilvl=entry.get("ilvl", 0),
-                    slot=entry.get("slot"),
-                    materia_slots=entry.get("materia_slots", 0),
-                    overmeld=entry.get("overmeld", False),
-                    base_params={int(k): v for k, v in entry.get("base_params", {}).items()},
-                    base_params_hq={int(k): v for k, v in entry.get("base_params_hq", {}).items()},
-                    damage_phys=entry.get("damage_phys"),
-                    damage_mag=entry.get("damage_mag"),
-                    delay_ms=entry.get("delay_ms"),
-                    occ_slot=entry.get("occ_slot"),
-                    unique=entry.get("unique", False),
-                    icon_url=entry.get("icon_url"),
-                )
+        return [
+            ItemRecord(
+                item_id=entry["item_id"],
+                name=entry["name"],
+                name_ja=entry.get("name_ja"),
+                jobs=entry.get("jobs", []),
+                ilvl=entry.get("ilvl", 0),
+                slot=entry.get("slot"),
+                materia_slots=entry.get("materia_slots", 0),
+                overmeld=entry.get("overmeld", False),
+                base_params={int(k): v for k, v in entry.get("base_params", {}).items()},
+                base_params_hq={int(k): v for k, v in entry.get("base_params_hq", {}).items()},
+                damage_phys=entry.get("damage_phys"),
+                damage_mag=entry.get("damage_mag"),
+                delay_ms=entry.get("delay_ms"),
+                occ_slot=entry.get("occ_slot"),
+                unique=entry.get("unique", False),
+                icon_url=entry.get("icon_url"),
             )
-        return items
+            for entry in cached
+        ]
 
 
 def slot_from_category(cat: dict) -> Optional[str]:

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import heapq
+import logging
+import ctypes
+import math
+import multiprocessing
 import os
+import time
 from bisect import bisect_right
 from collections import Counter, defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
-from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .models import (
     FoodRecord,
@@ -22,16 +25,34 @@ from .models import (
     SPELL_SPEED_JOBS,
 )
 from . import xivmath
-from .utils import sim_log, sim_debug_enabled
+from .gcd_analysis import LogGcdConstraint
+from .utils import encode_progress_message, sim_log, sim_debug_enabled
+
+logger = logging.getLogger(__name__)
 
 # Stats that can be melded.
 MELDABLE_STATS = {6, 19, 22, 27, 44, 45, 46}
 COMBAT_FOOD_BONUS_STATS = {1, 2, 3, 4, 5, 6, 19, 22, 27, 44, 45, 46}
+MAX_OPTIMIZATION_WORKERS = 16
+AUTO_OPTIMIZATION_WORKERS_MAX = 8
+PREVIEW_BATCH_SIZE = 32
+UPPER_BOUND_BATCH_SIZE = 4
+UPPER_BOUND_MAX_COMPOSITIONS = 250000
+GEAR_SEARCH_REQUIRED_RESULTS = 2
+SCORE_MODEL_VERSIONS = {
+    "dmg100p": 1,
+    "simdps": 1,
+    "simdps_self": 1,
+}
 
 # Match XIVGear materia rules.
 MATERIA_LEVEL_MAX_NORMAL = 12
 MATERIA_LEVEL_MAX_OVERMELD = 11
 MATERIA_ACCEPTABLE_OVERCAP_LOSS = 2
+
+
+def score_tie_tolerance(mode: str) -> float:
+    return 0.005 if str(mode or "") == "dmg100p" else 0.05
 
 JOB_MELD_PARAM_INDEX = {
     "PLD": 1,
@@ -119,6 +140,904 @@ SLOT_LABELS = {
 
 
 @dataclass(frozen=True)
+class OptimizationWorkerContext:
+    """Immutable inputs shared by all exact-optimization worker processes."""
+
+    items_by_id: Dict[int, ItemRecord]
+    materia_catalog: Dict[int, MateriaCategory]
+    foods: List[Optional[FoodRecord]]
+    casts: List[dict]
+    fight_duration_ms: int
+    cap_table: Dict[Tuple, int]
+    damage_summary: Optional[Dict[str, object]] = None
+    baseline_raw_stats: Optional[Dict[int, int]] = None
+    baseline_items: Optional[Dict[str, ItemRecord]] = None
+    baseline_gcd: Optional[float] = None
+    gcd_constraint: Optional[LogGcdConstraint] = None
+    job_mods: Optional[Dict[str, int]] = None
+    baseline_food: Optional[FoodRecord] = None
+    party_bonus: int = 0
+    baseline_party_bonus: Optional[int] = None
+    mode: str = "simdps"
+    baseline_race: Optional[str] = None
+    party_synergies: Optional[Dict[str, bool]] = None
+    crit_rate_offset: float = 0.0
+    dhit_rate_offset: float = 0.0
+
+
+@dataclass(frozen=True)
+class OptimizationRequest:
+    request_id: int
+    cache_key: Tuple
+    gearset: Gearset
+    selected_items: Dict[str, ItemRecord]
+    no_meld_slots: set
+
+
+@dataclass(frozen=True)
+class PreviewCandidate:
+    request_id: int
+    selected_items: Dict[str, ItemRecord]
+    raw_stats: Dict[int, int]
+
+
+@dataclass(frozen=True)
+class PreviewBatchRequest:
+    request_id: int
+    job: str
+    target_gcd: Optional[float]
+    race: Optional[str]
+    level: int
+    foods: Tuple[Optional[FoodRecord], ...]
+    candidates: Tuple[PreviewCandidate, ...]
+
+
+@dataclass(frozen=True)
+class UpperBoundBatchRequest:
+    request_id: int
+    requests: Tuple[OptimizationRequest, ...]
+
+
+def optimization_request_key(
+    gearset: Gearset,
+    selected_items: Optional[Dict[str, ItemRecord]] = None,
+    no_meld_slots: Optional[set] = None,
+) -> Tuple:
+    key_slots = []
+    for slot_name in GEAR_SLOTS:
+        selection = (gearset.items or {}).get(slot_name)
+        materia = (
+            tuple((m.base_param, m.grade) for m in (selection.materia or []))
+            if selection
+            else tuple()
+        )
+        relic = (
+            tuple(
+                sorted(
+                    (int(stat_id), int(value))
+                    for stat_id, value in dict(
+                        getattr(selection, "relic_stats", {}) or {}
+                    ).items()
+                    if int(value or 0) > 0
+                )
+            )
+            if selection
+            else tuple()
+        )
+        key_slots.append(
+            (
+                slot_name,
+                selection.item_id if selection else None,
+                materia,
+                relic,
+                bool(getattr(selection, "lock_item", False)) if selection else False,
+                bool(getattr(selection, "lock_materia", False)) if selection else False,
+            )
+        )
+    selected_signature = tuple(
+        (
+            slot_name,
+            int(item.item_id),
+            int(item.ilvl or 0),
+            tuple(
+                sorted(
+                    (int(stat_id), int(value))
+                    for stat_id, value in (item.base_params_hq or {}).items()
+                )
+            ),
+            int(item.damage_phys or 0),
+            int(item.damage_mag or 0),
+            int(item.delay_ms or 0),
+            int(item.materia_slots or 0),
+            bool(item.overmeld),
+        )
+        for slot_name, item in sorted((selected_items or {}).items())
+    )
+    return (
+        gearset.job,
+        gearset.food_id,
+        bool(getattr(gearset, "food_simulation", False)),
+        float(gearset.target_gcd or 0.0),
+        int(gearset.level or 0),
+        tuple(key_slots),
+        selected_signature,
+        tuple(sorted(str(slot) for slot in (no_meld_slots or set()))),
+    )
+
+
+_PROCESS_OPTIMIZATION_CONTEXT: Optional[OptimizationWorkerContext] = None
+_PROCESS_OPTIMIZATION_CANCEL_EVENT = None
+_PROCESS_PREVIEW_EVAL_CONTEXTS: Dict[Tuple[int, str, str, int], object] = {}
+
+
+def _init_optimization_process(
+    context: OptimizationWorkerContext,
+    cancel_event,
+) -> None:
+    global _PROCESS_OPTIMIZATION_CONTEXT, _PROCESS_OPTIMIZATION_CANCEL_EVENT
+    _PROCESS_OPTIMIZATION_CONTEXT = context
+    _PROCESS_OPTIMIZATION_CANCEL_EVENT = cancel_event
+    _PROCESS_PREVIEW_EVAL_CONTEXTS.clear()
+
+
+def _execute_optimization_request(
+    request: OptimizationRequest,
+    context: OptimizationWorkerContext,
+    stop_event,
+) -> Tuple[int, List[Tuple[Gearset, float, float]]]:
+    if stop_event is not None and stop_event.is_set():
+        return request.request_id, []
+    results = optimize(
+        request.gearset,
+        context.items_by_id,
+        context.materia_catalog,
+        context.foods,
+        context.casts,
+        context.fight_duration_ms,
+        context.cap_table,
+        damage_summary=context.damage_summary,
+        baseline_raw_stats=context.baseline_raw_stats,
+        baseline_items=context.baseline_items,
+        baseline_gcd=context.baseline_gcd,
+        gcd_constraint=context.gcd_constraint,
+        job_mods=context.job_mods,
+        baseline_food=context.baseline_food,
+        party_bonus=context.party_bonus,
+        baseline_party_bonus=context.baseline_party_bonus,
+        mode=context.mode,
+        baseline_race=context.baseline_race,
+        party_synergies=context.party_synergies,
+        crit_rate_offset=context.crit_rate_offset,
+        dhit_rate_offset=context.dhit_rate_offset,
+        selected_items_override=request.selected_items,
+        no_meld_slots=request.no_meld_slots,
+        progress=None,
+        stop_event=stop_event,
+    )
+    return request.request_id, results
+
+
+def _run_optimization_process_request(
+    request: OptimizationRequest,
+) -> Tuple[int, List[Tuple[Gearset, float, float]]]:
+    context = _PROCESS_OPTIMIZATION_CONTEXT
+    if context is None:
+        raise RuntimeError("Optimization worker context is not initialized")
+    return _execute_optimization_request(
+        request,
+        context,
+        _PROCESS_OPTIMIZATION_CANCEL_EVENT,
+    )
+
+
+def _preview_eval_context(
+    request: PreviewBatchRequest,
+    context: OptimizationWorkerContext,
+):
+    key = (
+        id(context),
+        request.job,
+        str(request.race or ""),
+        int(request.level),
+    )
+    cached = _PROCESS_PREVIEW_EVAL_CONTEXTS.get(key)
+    if cached is not None:
+        return cached
+    prepared = prepare_score_eval_context(
+        request.job,
+        context.damage_summary,
+        context.baseline_raw_stats,
+        context.baseline_items,
+        context.baseline_food,
+        context.baseline_gcd,
+        context.job_mods,
+        context.party_bonus,
+        context.baseline_party_bonus,
+        request.race,
+        context.baseline_race,
+        context.party_synergies,
+        context.mode,
+        request.level,
+    )
+    _PROCESS_PREVIEW_EVAL_CONTEXTS[key] = prepared
+    return prepared
+
+
+def _execute_preview_batch_request(
+    request: PreviewBatchRequest,
+    context: OptimizationWorkerContext,
+    stop_event,
+) -> Tuple[int, List[Tuple[int, float, float, int]]]:
+    eval_ctx = _preview_eval_context(request, context)
+    results: List[Tuple[int, float, float, int]] = []
+    for candidate in request.candidates:
+        if stop_event is not None and stop_event.is_set():
+            break
+        best_score = float("-inf")
+        best_gcd = 99.0
+        best_food_index = -1
+        for food_index, food in enumerate(request.foods):
+            try:
+                score, gcd = evaluate_score(
+                    candidate.raw_stats,
+                    request.job,
+                    context.casts,
+                    context.fight_duration_ms,
+                    request.target_gcd,
+                    damage_summary=context.damage_summary,
+                    job_mods=context.job_mods,
+                    food=food,
+                    party_bonus=context.party_bonus,
+                    baseline_raw_stats=context.baseline_raw_stats,
+                    baseline_items=context.baseline_items,
+                    selected_items=candidate.selected_items,
+                    baseline_food=context.baseline_food,
+                    mode=context.mode,
+                    race=request.race,
+                    baseline_party_bonus=context.baseline_party_bonus,
+                    baseline_race=context.baseline_race,
+                    party_synergies=context.party_synergies,
+                    debug=False,
+                    level=request.level,
+                    crit_rate_offset=context.crit_rate_offset,
+                    dhit_rate_offset=context.dhit_rate_offset,
+                    eval_ctx=eval_ctx,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to evaluate gear-search preview candidate "
+                    "(food_id=%s, items=%s)",
+                    int(food.food_id or 0) if food else 0,
+                    {
+                        slot: int(item.item_id)
+                        for slot, item in candidate.selected_items.items()
+                    },
+                )
+                score, gcd = 0.0, 99.0
+            if score > best_score + 1e-9 or (
+                abs(score - best_score) <= 1e-9 and gcd < best_gcd
+            ):
+                best_score = float(score)
+                best_gcd = float(gcd)
+                best_food_index = food_index
+        if best_score == float("-inf"):
+            best_score, best_gcd = 0.0, 99.0
+        results.append(
+            (candidate.request_id, best_score, best_gcd, best_food_index)
+        )
+    return request.request_id, results
+
+
+def _run_preview_process_request(
+    request: PreviewBatchRequest,
+) -> Tuple[int, List[Tuple[int, float, float, int]]]:
+    context = _PROCESS_OPTIMIZATION_CONTEXT
+    if context is None:
+        raise RuntimeError("Optimization worker context is not initialized")
+    return _execute_preview_batch_request(
+        request,
+        context,
+        _PROCESS_OPTIMIZATION_CANCEL_EVENT,
+    )
+
+
+def _execute_upper_bound_batch_request(
+    request: UpperBoundBatchRequest,
+    context: OptimizationWorkerContext,
+    stop_event,
+) -> Tuple[int, List[Tuple[Tuple, float]]]:
+    values: List[Tuple[Tuple, float]] = []
+    for candidate in request.requests:
+        if stop_event is not None and stop_event.is_set():
+            break
+        try:
+            bound = optimization_score_upper_bound(
+                candidate.gearset,
+                candidate.selected_items,
+                candidate.no_meld_slots,
+                context,
+                stop_event=stop_event,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to calculate optimization upper bound (request_id=%s)",
+                candidate.request_id,
+            )
+            bound = math.inf
+        values.append((candidate.cache_key, float(bound)))
+    return request.request_id, values
+
+
+def _run_upper_bound_process_request(
+    request: UpperBoundBatchRequest,
+) -> Tuple[int, List[Tuple[Tuple, float]]]:
+    context = _PROCESS_OPTIMIZATION_CONTEXT
+    if context is None:
+        raise RuntimeError("Optimization worker context is not initialized")
+    return _execute_upper_bound_batch_request(
+        request,
+        context,
+        _PROCESS_OPTIMIZATION_CANCEL_EVENT,
+    )
+
+
+def _windows_memory_gb() -> Tuple[Optional[float], Optional[float]]:
+    if os.name != "nt":
+        return None, None
+
+    class MemoryStatusEx(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", ctypes.c_ulong),
+            ("dwMemoryLoad", ctypes.c_ulong),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    status = MemoryStatusEx()
+    status.dwLength = ctypes.sizeof(status)
+    try:
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return None, None
+    except Exception:
+        return None, None
+    gb = float(1024**3)
+    return status.ullTotalPhys / gb, status.ullAvailPhys / gb
+
+
+def recommended_optimization_workers() -> int:
+    """Return a conservative CPU-process count without adding a psutil dependency."""
+
+    override = str(os.environ.get("GEARSIM_WORKERS", "")).strip()
+    if override:
+        try:
+            return max(1, min(MAX_OPTIMIZATION_WORKERS, int(override)))
+        except ValueError:
+            logger.warning("Ignored invalid GEARSIM_WORKERS=%r", override)
+
+    logical = max(1, int(os.cpu_count() or 1))
+    estimated_physical = max(1, logical // 2) if logical >= 4 else logical
+    cpu_limit = min(AUTO_OPTIMIZATION_WORKERS_MAX, estimated_physical)
+    total_gb, available_gb = _windows_memory_gb()
+    if total_gb is not None and available_gb is not None:
+        if total_gb < 12.0 or available_gb < 4.0:
+            return 1
+        if total_gb < 24.0 or available_gb < 8.0:
+            return min(cpu_limit, 4)
+        if available_gb < 14.0:
+            return min(cpu_limit, 6)
+    return max(1, cpu_limit)
+
+
+def _process_safe_value(value):
+    if isinstance(value, dict):
+        return {
+            _process_safe_value(key): _process_safe_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_process_safe_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_process_safe_value(item) for item in value)
+    if isinstance(value, set):
+        return {_process_safe_value(item) for item in value}
+    return value
+
+
+class OptimizationSession:
+    """Own one spawn process pool and an exact-result cache for a full GUI run."""
+
+    def __init__(
+        self,
+        context: OptimizationWorkerContext,
+        *,
+        worker_count: Optional[int] = None,
+    ) -> None:
+        self.context = replace(
+            context,
+            damage_summary=_process_safe_value(context.damage_summary),
+        )
+        self.worker_count = max(
+            1,
+            min(
+                MAX_OPTIMIZATION_WORKERS,
+                int(worker_count or recommended_optimization_workers()),
+            ),
+        )
+        self._mp_context = multiprocessing.get_context("spawn")
+        self._cancel_event = None
+        self._pool = None
+        self._cache: Dict[Tuple, Optional[Tuple[Gearset, float, float]]] = {}
+        self._variant_cache: Dict[Tuple, Tuple[Tuple[Gearset, float, float], ...]] = {}
+        self._upper_bound_cache: Dict[Tuple, float] = {}
+        self._parallel_failed = False
+
+    @property
+    def parallel_enabled(self) -> bool:
+        return self.worker_count > 1 and not self._parallel_failed
+
+    def __enter__(self) -> "OptimizationSession":
+        if self.worker_count <= 1:
+            return self
+        try:
+            self._cancel_event = self._mp_context.Event()
+            self._pool = self._mp_context.Pool(
+                processes=self.worker_count,
+                initializer=_init_optimization_process,
+                initargs=(self.context, self._cancel_event),
+            )
+        except Exception:
+            logger.exception("Failed to start optimization process pool; using serial fallback")
+            self._parallel_failed = True
+            self._terminate_pool()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        if exc_type is not None:
+            self.cancel()
+        else:
+            self.close()
+
+    def _terminate_pool(self) -> None:
+        pool = self._pool
+        self._pool = None
+        if pool is None:
+            return
+        try:
+            pool.terminate()
+        finally:
+            pool.join()
+
+    def close(self) -> None:
+        pool = self._pool
+        self._pool = None
+        if pool is None:
+            return
+        pool.close()
+        pool.join()
+
+    def cancel(self) -> None:
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+        self._terminate_pool()
+
+    def cached_variants(
+        self,
+        cache_key: Tuple,
+    ) -> Tuple[Tuple[Gearset, float, float], ...]:
+        return self._variant_cache.get(cache_key, ())
+
+    def _store_optimization_results(
+        self,
+        request: OptimizationRequest,
+        variants: Sequence[Tuple[Gearset, float, float]],
+        results: Dict[Tuple, Optional[Tuple[Gearset, float, float]]],
+    ) -> None:
+        stored_variants = tuple(variants)
+        best = stored_variants[0] if stored_variants else None
+        self._variant_cache[request.cache_key] = stored_variants
+        self._cache[request.cache_key] = best
+        results[request.cache_key] = best
+
+    def optimize_batch(
+        self,
+        requests: Sequence[OptimizationRequest],
+        *,
+        stop_event=None,
+        progress: Optional[Callable[[int, int, float, Optional[float]], None]] = None,
+    ) -> Dict[Tuple, Optional[Tuple[Gearset, float, float]]]:
+        if not requests:
+            return {}
+
+        results: Dict[Tuple, Optional[Tuple[Gearset, float, float]]] = {}
+        unique_pending: List[OptimizationRequest] = []
+        seen_pending: set = set()
+        for request in requests:
+            if request.cache_key in self._cache:
+                results[request.cache_key] = self._cache[request.cache_key]
+            elif request.cache_key not in seen_pending:
+                seen_pending.add(request.cache_key)
+                unique_pending.append(request)
+
+        total = len(unique_pending)
+        cache_hits = max(0, len(requests) - total)
+        if total == 0:
+            if progress:
+                progress(0, 0, 0.0, 0.0)
+            return results
+
+        started = time.perf_counter()
+
+        def report(completed: int) -> None:
+            if not progress:
+                return
+            elapsed = max(0.0, time.perf_counter() - started)
+            eta = None
+            if completed > 0:
+                eta = max(0.0, elapsed * (total - completed) / completed)
+            progress(completed, total, elapsed, eta)
+
+        if not self.parallel_enabled or self._pool is None:
+            for completed, request in enumerate(unique_pending, 1):
+                if stop_event is not None and stop_event.is_set():
+                    break
+                _request_id, variants = _execute_optimization_request(
+                    request,
+                    self.context,
+                    stop_event,
+                )
+                self._store_optimization_results(request, variants, results)
+                report(completed)
+            if sim_debug_enabled():
+                sim_log(
+                    f"[parallel-opt] mode=serial workers=1 requests={len(requests)} "
+                    f"evaluated={total} cache_hits={cache_hits} "
+                    f"elapsed={time.perf_counter() - started:.3f}s"
+                )
+            return results
+
+        async_results = {
+            request.request_id: (request, self._pool.apply_async(_run_optimization_process_request, (request,)))
+            for request in unique_pending
+        }
+        completed = 0
+        last_report = 0.0
+        parallel_error: Optional[BaseException] = None
+        while async_results:
+            if stop_event is not None and stop_event.is_set():
+                self.cancel()
+                return results
+            made_progress = False
+            for request_id, (request, async_result) in list(async_results.items()):
+                if not async_result.ready():
+                    continue
+                try:
+                    _result_id, variants = async_result.get()
+                except BaseException as exc:
+                    parallel_error = exc
+                    break
+                self._store_optimization_results(request, variants, results)
+                async_results.pop(request_id, None)
+                completed += 1
+                made_progress = True
+            if parallel_error is not None:
+                break
+            now = time.perf_counter()
+            if made_progress or now - last_report >= 1.0:
+                report(completed)
+                last_report = now
+            if async_results and not made_progress:
+                time.sleep(0.02)
+
+        if parallel_error is None:
+            report(completed)
+            if sim_debug_enabled():
+                sim_log(
+                    f"[parallel-opt] mode=process workers={self.worker_count} "
+                    f"requests={len(requests)} evaluated={total} cache_hits={cache_hits} "
+                    f"elapsed={time.perf_counter() - started:.3f}s"
+                )
+            return results
+
+        logger.error(
+            "Optimization process pool failed; retrying unfinished candidates serially: %s",
+            parallel_error,
+            exc_info=(
+                type(parallel_error),
+                parallel_error,
+                parallel_error.__traceback__,
+            ),
+        )
+        unresolved = [request for request, _result in async_results.values()]
+        self._parallel_failed = True
+        self._terminate_pool()
+        for request in unresolved:
+            if stop_event is not None and stop_event.is_set():
+                break
+            _request_id, variants = _execute_optimization_request(
+                request,
+                self.context,
+                stop_event,
+            )
+            self._store_optimization_results(request, variants, results)
+            completed += 1
+            report(completed)
+        return results
+
+    def evaluate_preview_batch(
+        self,
+        candidates: Sequence[PreviewCandidate],
+        *,
+        job: str,
+        target_gcd: Optional[float],
+        race: Optional[str],
+        level: int,
+        foods: Sequence[Optional[FoodRecord]],
+        stop_event=None,
+        progress: Optional[Callable[[int, int, float, Optional[float]], None]] = None,
+    ) -> Dict[int, Tuple[float, float, int]]:
+        if not candidates:
+            return {}
+        batches = [
+            PreviewBatchRequest(
+                request_id=batch_id,
+                job=job,
+                target_gcd=target_gcd,
+                race=race,
+                level=level,
+                foods=tuple(foods),
+                candidates=tuple(candidates[offset : offset + PREVIEW_BATCH_SIZE]),
+            )
+            for batch_id, offset in enumerate(
+                range(0, len(candidates), PREVIEW_BATCH_SIZE)
+            )
+        ]
+        total = len(candidates)
+        results: Dict[int, Tuple[float, float, int]] = {}
+        started = time.perf_counter()
+
+        def report(completed: int) -> None:
+            if not progress:
+                return
+            elapsed = max(0.0, time.perf_counter() - started)
+            eta = None
+            if completed > 0:
+                eta = max(0.0, elapsed * (total - completed) / completed)
+            progress(completed, total, elapsed, eta)
+
+        def consume(
+            values: Sequence[Tuple[int, float, float, int]],
+        ) -> None:
+            for request_id, score, gcd, food_index in values:
+                results[request_id] = (score, gcd, food_index)
+
+        if not self.parallel_enabled or self._pool is None:
+            completed = 0
+            for batch in batches:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                _batch_id, values = _execute_preview_batch_request(
+                    batch,
+                    self.context,
+                    stop_event,
+                )
+                consume(values)
+                completed += len(values)
+                report(completed)
+            return results
+
+        async_results = {
+            batch.request_id: (
+                batch,
+                self._pool.apply_async(_run_preview_process_request, (batch,)),
+            )
+            for batch in batches
+        }
+        completed = 0
+        last_report = 0.0
+        parallel_error: Optional[BaseException] = None
+        while async_results:
+            if stop_event is not None and stop_event.is_set():
+                self.cancel()
+                return results
+            made_progress = False
+            for batch_id, (batch, async_result) in list(async_results.items()):
+                if not async_result.ready():
+                    continue
+                try:
+                    _result_id, values = async_result.get()
+                except BaseException as exc:
+                    parallel_error = exc
+                    break
+                consume(values)
+                async_results.pop(batch_id, None)
+                completed += len(values)
+                made_progress = True
+            if parallel_error is not None:
+                break
+            now = time.perf_counter()
+            if made_progress or now - last_report >= 1.0:
+                report(completed)
+                last_report = now
+            if async_results and not made_progress:
+                time.sleep(0.02)
+
+        if parallel_error is None:
+            report(completed)
+            if sim_debug_enabled():
+                sim_log(
+                    f"[parallel-preview] workers={self.worker_count} "
+                    f"candidates={total} batches={len(batches)} "
+                    f"elapsed={time.perf_counter() - started:.3f}s"
+                )
+            return results
+
+        logger.error(
+            "Preview process pool failed; retrying unfinished batches serially: %s",
+            parallel_error,
+            exc_info=(
+                type(parallel_error),
+                parallel_error,
+                parallel_error.__traceback__,
+            ),
+        )
+        unresolved = [batch for batch, _result in async_results.values()]
+        self._parallel_failed = True
+        self._terminate_pool()
+        for batch in unresolved:
+            if stop_event is not None and stop_event.is_set():
+                break
+            _batch_id, values = _execute_preview_batch_request(
+                batch,
+                self.context,
+                stop_event,
+            )
+            consume(values)
+            completed += len(values)
+            report(completed)
+        return results
+
+    def evaluate_upper_bounds(
+        self,
+        requests: Sequence[OptimizationRequest],
+        *,
+        stop_event=None,
+        progress: Optional[Callable[[int, int, float, Optional[float]], None]] = None,
+    ) -> Dict[Tuple, float]:
+        if not requests:
+            return {}
+
+        results: Dict[Tuple, float] = {}
+        pending: List[OptimizationRequest] = []
+        seen: set = set()
+        for request in requests:
+            cached = self._upper_bound_cache.get(request.cache_key)
+            if cached is not None:
+                results[request.cache_key] = cached
+            elif request.cache_key not in seen:
+                seen.add(request.cache_key)
+                pending.append(request)
+        if not pending:
+            return results
+
+        batches = [
+            UpperBoundBatchRequest(
+                request_id=batch_id,
+                requests=tuple(pending[offset : offset + UPPER_BOUND_BATCH_SIZE]),
+            )
+            for batch_id, offset in enumerate(
+                range(0, len(pending), UPPER_BOUND_BATCH_SIZE)
+            )
+        ]
+        total = len(pending)
+        completed = 0
+        started = time.perf_counter()
+
+        def report() -> None:
+            if not progress:
+                return
+            elapsed = max(0.0, time.perf_counter() - started)
+            eta = None
+            if completed > 0:
+                eta = max(0.0, elapsed * (total - completed) / completed)
+            progress(completed, total, elapsed, eta)
+
+        def consume(values: Sequence[Tuple[Tuple, float]]) -> None:
+            nonlocal completed
+            for cache_key, bound in values:
+                safe_bound = float(bound)
+                self._upper_bound_cache[cache_key] = safe_bound
+                results[cache_key] = safe_bound
+                completed += 1
+
+        if not self.parallel_enabled or self._pool is None:
+            for batch in batches:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                _batch_id, values = _execute_upper_bound_batch_request(
+                    batch,
+                    self.context,
+                    stop_event,
+                )
+                consume(values)
+                report()
+            return results
+
+        async_results = {
+            batch.request_id: (
+                batch,
+                self._pool.apply_async(
+                    _run_upper_bound_process_request,
+                    (batch,),
+                ),
+            )
+            for batch in batches
+        }
+        parallel_error: Optional[BaseException] = None
+        last_report = 0.0
+        while async_results:
+            if stop_event is not None and stop_event.is_set():
+                self.cancel()
+                return results
+            made_progress = False
+            for batch_id, (_batch, async_result) in list(async_results.items()):
+                if not async_result.ready():
+                    continue
+                try:
+                    _result_id, values = async_result.get()
+                except BaseException as exc:
+                    parallel_error = exc
+                    break
+                consume(values)
+                async_results.pop(batch_id, None)
+                made_progress = True
+            if parallel_error is not None:
+                break
+            now = time.perf_counter()
+            if made_progress or now - last_report >= 1.0:
+                report()
+                last_report = now
+            if async_results and not made_progress:
+                time.sleep(0.02)
+
+        if parallel_error is None:
+            report()
+            if sim_debug_enabled():
+                sim_log(
+                    f"[parallel-bound] workers={self.worker_count} "
+                    f"candidates={total} elapsed={time.perf_counter() - started:.3f}s"
+                )
+            return results
+
+        logger.error(
+            "Upper-bound process pool failed; retrying unfinished batches serially: %s",
+            parallel_error,
+            exc_info=(
+                type(parallel_error),
+                parallel_error,
+                parallel_error.__traceback__,
+            ),
+        )
+        unresolved = [batch for batch, _result in async_results.values()]
+        self._parallel_failed = True
+        self._terminate_pool()
+        for batch in unresolved:
+            if stop_event is not None and stop_event.is_set():
+                break
+            _batch_id, values = _execute_upper_bound_batch_request(
+                batch,
+                self.context,
+                stop_event,
+            )
+            consume(values)
+            report()
+        return results
+
+@dataclass(frozen=True)
 class ActionReplayEntry:
     action_id: int
     bucket_damage: float
@@ -158,11 +1077,44 @@ class ScoreEvalContext:
     max_ts: Optional[int] = None
 
 
+@dataclass(frozen=True)
+class GearSearchScoreContext:
+    main_stat_id: int
+    speed_stat_id: int
+    target_gcd: Optional[float]
+    required_item_speed: Optional[int]
+    stat_weights: Optional[Dict[int, float]] = None
+    mode: str = "simdps"
+
+
 @dataclass
 class ExactStateNode:
     parent: Optional["ExactStateNode"]
     slot: str
     melds: Tuple[MateriaSlotSelection, ...]
+
+
+def _exact_stat_tuple_adder(
+    length: int,
+) -> Callable[[Tuple[int, ...], Tuple[int, ...]], Tuple[int, ...]]:
+    if length == 4:
+        return lambda left, right: (
+            left[0] + right[0],
+            left[1] + right[1],
+            left[2] + right[2],
+            left[3] + right[3],
+        )
+    if length == 5:
+        return lambda left, right: (
+            left[0] + right[0],
+            left[1] + right[1],
+            left[2] + right[2],
+            left[3] + right[3],
+            left[4] + right[4],
+        )
+    return lambda left, right: tuple(
+        left[index] + right[index] for index in range(length)
+    )
 
 JOB_ALLOWED_STATS = {
     "PLD": {27, 22, 44, 19, 45},
@@ -385,12 +1337,14 @@ def _clone_gearset_with_swapped_item(
     gearset: Gearset,
     slot_name: str,
     item_id: int,
+    relic_stats: Optional[Dict[int, int]] = None,
 ) -> Gearset:
     items = dict(gearset.items or {})
     existing = items.get(slot_name)
     items[slot_name] = ItemSelection(
         item_id=item_id,
         materia=[],
+        relic_stats=dict(relic_stats or {}),
         lock_item=bool(getattr(existing, "lock_item", False)),
         lock_materia=bool(getattr(existing, "lock_materia", False)),
         excluded_item_ids=list(getattr(existing, "excluded_item_ids", []) or []),
@@ -399,6 +1353,7 @@ def _clone_gearset_with_swapped_item(
         job=gearset.job,
         items=items,
         food_id=gearset.food_id,
+        food_simulation=bool(getattr(gearset, "food_simulation", False)),
         target_gcd=gearset.target_gcd,
         note=gearset.note,
         race=gearset.race,
@@ -428,6 +1383,7 @@ def _gear_search_item_score(
     job: str,
     target_gcd: Optional[float],
     level: int,
+    score_context: Optional[GearSearchScoreContext] = None,
 ) -> float:
     weapon_damage = max(int(item.damage_phys or 0), int(item.damage_mag or 0))
     meld_slots = total_meld_slots_for_item(item)
@@ -438,6 +1394,43 @@ def _gear_search_item_score(
         level,
         weapon_damage=weapon_damage,
         meld_capacity=meld_slots,
+        score_context=score_context,
+    )
+
+
+def _prepare_gear_search_score_context(
+    job: str,
+    target_gcd: Optional[float],
+    level: int,
+    *,
+    mode: str = "simdps",
+    stat_weights: Optional[Dict[int, float]] = None,
+) -> GearSearchScoreContext:
+    main_stat_id = MAIN_STAT_BY_JOB.get(job, 4)
+    speed_stat_id = 46 if job in SPELL_SPEED_JOBS else 45
+    required_speed = required_speed_stat_for_target_gcd(job, target_gcd, level=level)
+    required_item_speed = None
+    if required_speed is not None:
+        required_item_speed = max(0, int(required_speed) - int(level_stats(level).base_sub))
+    if stat_weights is None:
+        stat_weights = {
+            27: 1.45,
+            22: 1.25,
+            44: 1.10,
+            45: 1.00,
+            46: 1.00,
+            19: 0.80 if job in {"PLD", "WAR", "DRK", "GNB"} else 0.05,
+            6: 0.10 if job in {"WHM", "SCH", "AST", "SGE"} else 0.0,
+        }
+        if mode == "dmg100p" and target_gcd is None:
+            stat_weights[speed_stat_id] = 0.0
+    return GearSearchScoreContext(
+        main_stat_id=main_stat_id,
+        speed_stat_id=speed_stat_id,
+        target_gcd=target_gcd,
+        required_item_speed=required_item_speed,
+        stat_weights=dict(stat_weights),
+        mode=mode,
     )
 
 
@@ -446,19 +1439,18 @@ def _gear_search_speed_score(
     job: str,
     target_gcd: Optional[float],
     level: int,
+    score_context: Optional[GearSearchScoreContext] = None,
 ) -> float:
+    context = score_context or _prepare_gear_search_score_context(job, target_gcd, level)
     speed = int(speed_value or 0)
     if speed <= 0:
         return 0.0
-    if target_gcd is None:
+    if context.target_gcd is None:
         return float(speed)
-    required_speed = required_speed_stat_for_target_gcd(job, target_gcd, level=level)
-    if required_speed is None:
+    if context.required_item_speed is None:
         return float(speed) * 0.75
-    level_base = int(level_stats(level).base_sub)
-    required_item_speed = max(0, int(required_speed) - level_base)
-    useful_speed = min(speed, required_item_speed)
-    overspeed = max(0, speed - required_item_speed)
+    useful_speed = min(speed, context.required_item_speed)
+    overspeed = max(0, speed - context.required_item_speed)
     # Search beam should value meeting target GCD, but avoid tunneling on
     # excessive SpS/SkS states that later exact evaluation rejects.
     return float(useful_speed) * 0.9 - float(overspeed) * 0.55
@@ -472,20 +1464,30 @@ def _gear_search_state_score(
     *,
     weapon_damage: int = 0,
     meld_capacity: int = 0,
+    score_context: Optional[GearSearchScoreContext] = None,
 ) -> float:
-    main_stat_id = MAIN_STAT_BY_JOB.get(job, 4)
-    speed_stat_id = 46 if job in SPELL_SPEED_JOBS else 45
-    support_stat = int(stats.get(19, 0)) + int(stats.get(6, 0))
-    speed_score = _gear_search_speed_score(int(stats.get(speed_stat_id, 0)), job, target_gcd, level)
+    context = score_context or _prepare_gear_search_score_context(job, target_gcd, level)
+    stat_weights = context.stat_weights or {}
+    speed_weight = float(stat_weights.get(context.speed_stat_id, 1.0))
+    if context.target_gcd is not None:
+        speed_weight = max(1.0, speed_weight)
+    speed_score = _gear_search_speed_score(
+        int(stats.get(context.speed_stat_id, 0)),
+        job,
+        target_gcd,
+        level,
+        score_context=context,
+    )
     return (
         float(int(weapon_damage or 0)) * 10000.0
-        + float(int(stats.get(main_stat_id, 0))) * 110.0
-        + float(int(stats.get(27, 0))) * 1.45
-        + float(int(stats.get(22, 0))) * 1.25
-        + float(int(stats.get(44, 0))) * 1.10
-        + speed_score
+        + float(int(stats.get(context.main_stat_id, 0))) * 110.0
+        + float(int(stats.get(27, 0))) * float(stat_weights.get(27, 1.45))
+        + float(int(stats.get(22, 0))) * float(stat_weights.get(22, 1.25))
+        + float(int(stats.get(44, 0))) * float(stat_weights.get(44, 1.10))
+        + speed_score * speed_weight
         + float(int(stats.get(3, 0))) * 0.20
-        + float(support_stat) * 0.15
+        + float(int(stats.get(19, 0))) * float(stat_weights.get(19, 0.15))
+        + float(int(stats.get(6, 0))) * float(stat_weights.get(6, 0.15))
         + float(int(meld_capacity or 0)) * 85.0
     )
 
@@ -495,15 +1497,26 @@ def _gear_search_secondary_score(
     job: str,
     target_gcd: Optional[float],
     level: int,
+    score_context: Optional[GearSearchScoreContext] = None,
 ) -> float:
-    speed_stat_id = 46 if job in SPELL_SPEED_JOBS else 45
-    support_stat = int(stats.get(19, 0)) + int(stats.get(6, 0))
+    context = score_context or _prepare_gear_search_score_context(job, target_gcd, level)
+    stat_weights = context.stat_weights or {}
+    speed_weight = float(stat_weights.get(context.speed_stat_id, 1.0))
+    if context.target_gcd is not None:
+        speed_weight = max(1.0, speed_weight)
     return (
-        float(int(stats.get(27, 0))) * 1.50
-        + float(int(stats.get(22, 0))) * 1.65
-        + float(int(stats.get(44, 0))) * 1.25
-        + _gear_search_speed_score(int(stats.get(speed_stat_id, 0)), job, target_gcd, level)
-        + float(support_stat) * 0.15
+        float(int(stats.get(27, 0))) * float(stat_weights.get(27, 1.50))
+        + float(int(stats.get(22, 0))) * float(stat_weights.get(22, 1.65))
+        + float(int(stats.get(44, 0))) * float(stat_weights.get(44, 1.25))
+        + _gear_search_speed_score(
+            int(stats.get(context.speed_stat_id, 0)),
+            job,
+            target_gcd,
+            level,
+            score_context=context,
+        ) * speed_weight
+        + float(int(stats.get(19, 0))) * float(stat_weights.get(19, 0.15))
+        + float(int(stats.get(6, 0))) * float(stat_weights.get(6, 0.15))
     )
 
 
@@ -513,6 +1526,7 @@ def _gear_search_diversified_states(
     job: str,
     target_gcd: Optional[float],
     level: int,
+    score_context: Optional[GearSearchScoreContext] = None,
 ) -> List[Dict[str, object]]:
     if limit <= 0 or not states:
         return []
@@ -523,46 +1537,81 @@ def _gear_search_diversified_states(
     meld_limit = max(1, int(limit * 0.20))
     secondary_limit = max(1, limit - primary_limit - meld_limit)
 
+    context = score_context or _prepare_gear_search_score_context(job, target_gcd, level)
+    decorated = [
+        (
+            entry,
+            float(entry["_gear_search_secondary_score"])
+            if entry.get("_gear_search_secondary_score") is not None
+            else _gear_search_secondary_score(
+                entry.get("stats") or {}, job, target_gcd, level, score_context=context
+            ),
+        )
+        for entry in states
+    ]
     ranked_by_score = sorted(
-        states,
-        key=lambda entry: (
-            -float(entry.get("score") or 0.0),
-            -int(entry.get("meld_capacity") or 0),
-            -_gear_search_secondary_score(entry.get("stats") or {}, job, target_gcd, level),
+        decorated,
+        key=lambda row: (
+            -float(row[0].get("score") or 0.0),
+            -int(row[0].get("meld_capacity") or 0),
+            -row[1],
+            int(row[0].get("_search_sequence") or 0),
         ),
     )
     ranked_by_meld = sorted(
-        states,
-        key=lambda entry: (
-            -int(entry.get("meld_capacity") or 0),
-            -_gear_search_secondary_score(entry.get("stats") or {}, job, target_gcd, level),
-            -float(entry.get("score") or 0.0),
+        decorated,
+        key=lambda row: (
+            -int(row[0].get("meld_capacity") or 0),
+            -row[1],
+            -float(row[0].get("score") or 0.0),
+            int(row[0].get("_search_sequence") or 0),
         ),
     )
     ranked_by_secondary = sorted(
-        states,
-        key=lambda entry: (
-            -_gear_search_secondary_score(entry.get("stats") or {}, job, target_gcd, level),
-            -int(entry.get("meld_capacity") or 0),
-            -float(entry.get("score") or 0.0),
+        decorated,
+        key=lambda row: (
+            -row[1],
+            -int(row[0].get("meld_capacity") or 0),
+            -float(row[0].get("score") or 0.0),
+            int(row[0].get("_search_sequence") or 0),
         ),
     )
 
     selected: List[Dict[str, object]] = []
     seen: set = set()
+    signature_cache: Dict[
+        int,
+        Tuple[Tuple[str, int, Tuple[Tuple[int, int], ...]], ...],
+    ] = {}
 
-    def add_from(entries: List[Dict[str, object]], quota: int) -> None:
+    def add_from(entries: List[Tuple[Dict[str, object], float]], quota: int) -> None:
         if quota <= 0:
             return
         added = 0
-        for entry in entries:
-            signature = tuple(
-                sorted(
-                    (slot, int(item.item_id))
-                    for slot, item in (entry.get("items") or {}).items()
-                    if item is not None
+        for entry, _secondary_score in entries:
+            entry_id = id(entry)
+            signature = signature_cache.get(entry_id)
+            if signature is None:
+                signature = tuple(
+                    sorted(
+                        (
+                            slot,
+                            int(item.item_id),
+                            tuple(
+                                sorted(
+                                    (int(stat_id), int(value))
+                                    for stat_id, value in dict(
+                                        getattr(item, "_gear_search_relic_stats", {}) or {}
+                                    ).items()
+                                    if int(value or 0) > 0
+                                )
+                            ),
+                        )
+                        for slot, item in (entry.get("items") or {}).items()
+                        if item is not None
+                    )
                 )
-            )
+                signature_cache[entry_id] = signature
             if signature in seen:
                 continue
             seen.add(signature)
@@ -577,6 +1626,149 @@ def _gear_search_diversified_states(
     if len(selected) < limit:
         add_from(ranked_by_score, limit - len(selected))
     return selected[:limit]
+
+
+def _gear_search_ranked_state_union(
+    states: List[Dict[str, object]],
+    limit: int,
+    job: str,
+    target_gcd: Optional[float],
+    level: int,
+    score_context: Optional[GearSearchScoreContext] = None,
+) -> List[Dict[str, object]]:
+    if limit <= 0 or not states:
+        return []
+    if len(states) <= limit:
+        return states
+    context = score_context or _prepare_gear_search_score_context(job, target_gcd, level)
+    decorated = [
+        (
+            entry,
+            float(entry["_gear_search_secondary_score"])
+            if entry.get("_gear_search_secondary_score") is not None
+            else _gear_search_secondary_score(
+                entry.get("stats") or {}, job, target_gcd, level, score_context=context
+            ),
+        )
+        for entry in states
+    ]
+    ranked_lists = (
+        sorted(
+            decorated,
+            key=lambda row: (
+                -float(row[0].get("score") or 0.0),
+                -int(row[0].get("meld_capacity") or 0),
+                -row[1],
+                int(row[0].get("_search_sequence") or 0),
+            ),
+        ),
+        sorted(
+            decorated,
+            key=lambda row: (
+                -int(row[0].get("meld_capacity") or 0),
+                -row[1],
+                -float(row[0].get("score") or 0.0),
+                int(row[0].get("_search_sequence") or 0),
+            ),
+        ),
+        sorted(
+            decorated,
+            key=lambda row: (
+                -row[1],
+                -int(row[0].get("meld_capacity") or 0),
+                -float(row[0].get("score") or 0.0),
+                int(row[0].get("_search_sequence") or 0),
+            ),
+        ),
+    )
+    retained: List[Dict[str, object]] = []
+    seen_ids: set[int] = set()
+    for ranked in ranked_lists:
+        for entry, _secondary_score in ranked[:limit]:
+            entry_id = id(entry)
+            if entry_id in seen_ids:
+                continue
+            seen_ids.add(entry_id)
+            retained.append(entry)
+    retained.sort(key=lambda entry: int(entry.get("_search_sequence") or 0))
+    return retained
+
+
+def _gear_search_preview_shortlist(
+    states: List[Dict[str, object]],
+    primary_limit: int,
+    diversity_extra_limit: int,
+    job: str,
+    target_gcd: Optional[float],
+    level: int,
+    score_context: Optional[GearSearchScoreContext] = None,
+) -> List[Dict[str, object]]:
+    if primary_limit <= 0 or not states:
+        return []
+    ranked_by_preview = sorted(
+        states,
+        key=lambda entry: (
+            -float(entry.get("preview_score") or 0.0),
+            -int(entry.get("meld_capacity") or 0),
+            -float(entry.get("heuristic_score") or 0.0),
+            float(entry.get("preview_gcd") or 99.0),
+            int(entry.get("_search_sequence") or 0),
+        ),
+    )
+    selected = list(ranked_by_preview[:primary_limit])
+    if diversity_extra_limit <= 0 or len(selected) >= len(states):
+        return selected
+    seen_ids = {id(entry) for entry in selected}
+    diversity_pool = _gear_search_diversified_states(
+        states,
+        min(len(states), primary_limit),
+        job,
+        target_gcd,
+        level,
+        score_context=score_context,
+    )
+    candidate_pools = [diversity_pool]
+    if target_gcd is not None:
+        best_by_gcd_band: Dict[float, Dict[str, object]] = {}
+        for entry in ranked_by_preview:
+            gcd_band = round(float(entry.get("preview_gcd") or 99.0), 2)
+            best_by_gcd_band.setdefault(gcd_band, entry)
+        candidate_pools.append(
+            [
+                entry
+                for _gcd_band, entry in sorted(
+                    best_by_gcd_band.items(),
+                    key=lambda row: (abs(row[0] - float(target_gcd)), row[0]),
+                )
+            ]
+        )
+    pool_indexes = [0] * len(candidate_pools)
+    while len(selected) < primary_limit + diversity_extra_limit:
+        added = False
+        for pool_index, pool in enumerate(candidate_pools):
+            while pool_indexes[pool_index] < len(pool):
+                entry = pool[pool_indexes[pool_index]]
+                pool_indexes[pool_index] += 1
+                if id(entry) in seen_ids:
+                    continue
+                seen_ids.add(id(entry))
+                selected.append(entry)
+                added = True
+                break
+            if len(selected) >= primary_limit + diversity_extra_limit:
+                break
+        if not added:
+            break
+    selected.sort(
+        key=lambda entry: (
+            -float(entry.get("preview_score") or 0.0),
+            -int(entry.get("meld_capacity") or 0),
+            -float(entry.get("heuristic_score") or 0.0),
+            float(entry.get("preview_gcd") or 99.0),
+            int(entry.get("_search_sequence") or 0),
+        )
+    )
+    return selected
 
 
 def _normalize_party_synergies(
@@ -604,6 +1796,57 @@ def is_combat_food(food: Optional[FoodRecord]) -> bool:
         except Exception:
             continue
     return False
+
+
+def highest_item_level_combat_foods(
+    foods: Sequence[Optional[FoodRecord]],
+) -> List[FoodRecord]:
+    combat_foods = [food for food in foods if is_combat_food(food)]
+    known_levels = [int(food.level_item) for food in combat_foods if food.level_item is not None]
+    if not known_levels:
+        return combat_foods
+    highest_il = max(known_levels)
+    return [
+        food
+        for food in combat_foods
+        if food.level_item is not None and int(food.level_item) == highest_il
+    ]
+
+
+def non_dominated_combat_foods(
+    foods: Sequence[FoodRecord],
+    relevant_stats: Sequence[int],
+) -> List[FoodRecord]:
+    stats = tuple(sorted({int(stat_id) for stat_id in relevant_stats}))
+    if not stats:
+        return list(foods)
+
+    def bonus_pair(food: FoodRecord, stat_id: int) -> Tuple[int, int]:
+        bonus = (food.bonuses or {}).get(stat_id)
+        if bonus is None:
+            return 0, 0
+        return int(bonus.percentage or 0), int(bonus.maximum or 0)
+
+    def dominates(left: FoodRecord, right: FoodRecord) -> bool:
+        strictly_better = False
+        for stat_id in stats:
+            left_pct, left_max = bonus_pair(left, stat_id)
+            right_pct, right_max = bonus_pair(right, stat_id)
+            if left_pct < right_pct or left_max < right_max:
+                return False
+            if left_pct > right_pct or left_max > right_max:
+                strictly_better = True
+        return strictly_better
+
+    candidates = list(foods)
+    return [
+        food
+        for index, food in enumerate(candidates)
+        if not any(
+            other_index != index and dominates(other, food)
+            for other_index, other in enumerate(candidates)
+        )
+    ]
 
 
 def _average_party_synergy_effect(
@@ -919,6 +2162,16 @@ def gcd_meets_target(gcd: float, target_gcd: Optional[float]) -> bool:
     return round(float(gcd), 3) <= round(float(target_gcd), 3) + GCD_TARGET_EPSILON
 
 
+def gcd_meets_constraints(
+    gcd: float,
+    target_gcd: Optional[float],
+    log_constraint: Optional[LogGcdConstraint],
+) -> bool:
+    if not gcd_meets_target(gcd, target_gcd):
+        return False
+    return log_constraint is None or log_constraint.accepts(gcd)
+
+
 @lru_cache(maxsize=1024)
 def _required_speed_stat_for_target_gcd_cached(
     job: str,
@@ -1018,13 +2271,31 @@ def summarize_damage(
         total_absorbed += float(absorbed)
         total_overkill += float(overkill)
         ability = ev.get("ability") or {}
-        name = str(ability.get("name") or "")
-        ability_type = ability.get("type")
-        action_id = ability.get("gameID") or ability.get("guid") or ability.get("id") or 0
+        action_id = (
+            ability.get("gameID")
+            or ability.get("guid")
+            or ability.get("id")
+            or ev.get("abilityGameID")
+            or ev.get("abilityGuid")
+            or ev.get("actionID")
+            or 0
+        )
         try:
             action_id_int = int(action_id)
         except Exception:
             action_id_int = 0
+        action_record = action_data.get(action_id_int) if action_data else None
+        name = str(
+            ability.get("name")
+            or getattr(action_record, "name_ja", None)
+            or getattr(action_record, "name", None)
+            or ""
+        )
+        ability_type = ability.get("type") or getattr(
+            action_record,
+            "attack_type",
+            None,
+        )
         is_dot = bool(ev.get("tick") or ev.get("isTick"))
         lower = name.lower()
         is_auto = lower in {"auto attack", "auto-attack", "attack", "攻撃", "オートアタック"}
@@ -1035,10 +2306,11 @@ def summarize_damage(
             attack_type = ability_type
         else:
             attack_type = _normalize_attack_type_name(ability_type, job)
-        if attack_type == "Unknown" and action_data and action_id_int:
-            rec = action_data.get(action_id_int)
-            if rec is not None:
-                attack_type = _normalize_attack_type_name(getattr(rec, "attack_type", None), job)
+        if attack_type == "Unknown" and action_record is not None:
+            attack_type = _normalize_attack_type_name(
+                getattr(action_record, "attack_type", None),
+                job,
+            )
         if attack_type == "Unknown":
             attack_type = "Spell" if job in SPELL_SPEED_JOBS else "Weaponskill"
         buckets[(attack_type, is_dot)] += float(amount)
@@ -1128,7 +2400,7 @@ def summarize_timeline_damage(
     cast_ts = [_ts(ev) for ev in cast_only]
     cast_action_ids = [_aid(ev) for ev in cast_only]
     casts_by_action: Dict[int, List[Tuple[int, int]]] = defaultdict(list)
-    for idx, ev in enumerate(cast_only):
+    for idx, _ev in enumerate(cast_only):
         aid = cast_action_ids[idx]
         if aid > 0:
             casts_by_action[aid].append((cast_ts[idx], idx))
@@ -1986,6 +3258,175 @@ def meld_stats_for_item(
     return agg
 
 
+@lru_cache(maxsize=128)
+def _meld_count_compositions(
+    total_slots: int,
+    stat_count: int,
+) -> Tuple[Tuple[int, ...], ...]:
+    if stat_count <= 0:
+        return ((),)
+    if stat_count == 1:
+        return ((max(0, int(total_slots)),),)
+
+    values: List[Tuple[int, ...]] = []
+
+    def append_compositions(remaining: int, remaining_stats: int, prefix: Tuple[int, ...]) -> None:
+        if remaining_stats == 1:
+            values.append(prefix + (remaining,))
+            return
+        for count in range(remaining + 1):
+            append_compositions(
+                remaining - count,
+                remaining_stats - 1,
+                prefix + (count,),
+            )
+
+    append_compositions(max(0, int(total_slots)), int(stat_count), ())
+    return tuple(values)
+
+
+def optimization_score_upper_bound(
+    gearset: Gearset,
+    selected_items: Dict[str, ItemRecord],
+    no_meld_slots: set,
+    context: OptimizationWorkerContext,
+    *,
+    stop_event=None,
+) -> float:
+    """Return a score upper bound; infinity means the candidate must be evaluated."""
+
+    job = str(gearset.job or "")
+    mode = str(context.mode or "")
+    if not job or not selected_items or not context.job_mods:
+        return math.inf
+    if mode in {"simdps", "simdps_self"} and not (
+        context.damage_summary
+        and context.baseline_raw_stats
+        and context.baseline_items is not None
+        and context.fight_duration_ms > 0
+    ):
+        # The fallback weighted score has a target-GCD weight discontinuity and
+        # is intentionally not used for mathematical pruning.
+        return math.inf
+    if mode not in {"dmg100p", "simdps", "simdps_self"}:
+        return math.inf
+
+    relevant_stats = tuple(sorted(allowed_meld_stats(job)))
+    if not relevant_stats:
+        return math.inf
+    max_materia_value = max(
+        (
+            int(grade.value or 0)
+            for stat_id in relevant_stats
+            for grade in (context.materia_catalog.get(stat_id).grades if context.materia_catalog.get(stat_id) else [])
+        ),
+        default=0,
+    )
+    if max_materia_value <= 0:
+        return math.inf
+
+    raw_stats = aggregate_base_stats(selected_items)
+    free_slots = 0
+    global_caps = {stat_id: 0 for stat_id in relevant_stats}
+    for slot, item in selected_items.items():
+        if slot in no_meld_slots:
+            continue
+        selection = (gearset.items or {}).get(slot)
+        if _selection_lock_item(selection) and _selection_lock_materia(selection):
+            fixed_stats = meld_stats_for_item(
+                item,
+                list(selection.materia or []),
+                context.materia_catalog,
+                context.cap_table,
+            )
+            for stat_id, value in fixed_stats.items():
+                raw_stats[stat_id] = int(raw_stats.get(stat_id, 0)) + int(value)
+            continue
+        free_slots += total_meld_slots_for_item(item)
+        for stat_id in relevant_stats:
+            global_caps[stat_id] += remaining_cap_for_item(
+                item,
+                stat_id,
+                context.cap_table,
+            )
+
+    composition_count = math.comb(
+        free_slots + len(relevant_stats) - 1,
+        len(relevant_stats) - 1,
+    )
+    if composition_count > UPPER_BOUND_MAX_COMPOSITIONS:
+        return math.inf
+
+    foods = list(context.foods or [])
+    if not foods:
+        return math.inf
+    level_value = gearset_level(gearset)
+    eval_ctx = prepare_score_eval_context(
+        job,
+        context.damage_summary,
+        context.baseline_raw_stats,
+        context.baseline_items,
+        context.baseline_food,
+        context.baseline_gcd,
+        context.job_mods,
+        context.party_bonus,
+        context.baseline_party_bonus,
+        gearset.race,
+        context.baseline_race,
+        context.party_synergies,
+        mode,
+        level_value,
+    )
+    best_score = float("-inf")
+    for composition_index, counts in enumerate(
+        _meld_count_compositions(free_slots, len(relevant_stats))
+    ):
+        if (
+            stop_event is not None
+            and (composition_index % 256) == 0
+            and stop_event.is_set()
+        ):
+            return math.inf
+        optimistic_stats = dict(raw_stats)
+        for stat_id, count in zip(relevant_stats, counts):
+            optimistic_stats[stat_id] = int(optimistic_stats.get(stat_id, 0)) + min(
+                int(count) * max_materia_value,
+                int(global_caps.get(stat_id, 0)),
+            )
+        for food in foods:
+            score, _gcd = evaluate_score(
+                optimistic_stats,
+                job,
+                context.casts,
+                context.fight_duration_ms,
+                None,
+                damage_summary=context.damage_summary,
+                job_mods=context.job_mods,
+                food=food,
+                party_bonus=context.party_bonus,
+                baseline_raw_stats=context.baseline_raw_stats,
+                baseline_items=context.baseline_items,
+                selected_items=selected_items,
+                baseline_food=context.baseline_food,
+                baseline_gcd=context.baseline_gcd,
+                mode=mode,
+                race=gearset.race,
+                baseline_party_bonus=context.baseline_party_bonus,
+                baseline_race=context.baseline_race,
+                party_synergies=context.party_synergies,
+                level=level_value,
+                crit_rate_offset=context.crit_rate_offset,
+                dhit_rate_offset=context.dhit_rate_offset,
+                eval_ctx=eval_ctx,
+            )
+            if not math.isfinite(score):
+                return math.inf
+            best_score = max(best_score, float(score))
+    if best_score == float("-inf"):
+        return math.inf
+    return math.nextafter(best_score, math.inf)
+
+
 def compute_dmg100p_weights(
     job: str,
     base_stats: Dict[int, int],
@@ -2078,14 +3519,16 @@ def generate_meld_combos(
         for stat_id, cat in materia_catalog.items():
             if stat_id not in allowed_stats:
                 continue
-            for grade in grades_for_slot(
-                item,
-                cat.grades,
-                slot_idx,
-                max_grades=max_grades,
-                policy=grade_policy,
-            ):
-                slot_candidates.append((stat_id, grade))
+            slot_candidates.extend(
+                (stat_id, grade)
+                for grade in grades_for_slot(
+                    item,
+                    cat.grades,
+                    slot_idx,
+                    max_grades=max_grades,
+                    policy=grade_policy,
+                )
+            )
         if len(slot_candidates) > candidate_limit:
             slot_candidates.sort(
                 key=lambda x: (stat_weights.get(x[0], 0.0) * x[1].value),
@@ -2148,7 +3591,7 @@ def optimize(
     gearset: Gearset,
     items_by_id: Dict[int, ItemRecord],
     materia_catalog: Dict[int, MateriaCategory],
-    foods: List[FoodRecord],
+    foods: List[Optional[FoodRecord]],
     casts: List[dict],
     fight_duration_ms: int,
     cap_table: Dict[Tuple[str, int], int],
@@ -2156,6 +3599,7 @@ def optimize(
     baseline_raw_stats: Optional[Dict[int, int]] = None,
     baseline_items: Optional[Dict[str, ItemRecord]] = None,
     baseline_gcd: Optional[float] = None,
+    gcd_constraint: Optional[LogGcdConstraint] = None,
     job_mods: Optional[Dict[str, int]] = None,
     baseline_food: Optional[FoodRecord] = None,
     party_bonus: int = 0,
@@ -2170,7 +3614,6 @@ def optimize(
     progress: Optional[Callable[[int, str], None]] = None,
     stop_event=None,
     beam_width: int = 40,
-    shortlist_parallel_workers: Optional[int] = None,
 ) -> List[Tuple[Gearset, float, float]]:
     debug_enabled = sim_debug_enabled()
     # Validate selected items
@@ -2259,7 +3702,6 @@ def optimize(
     if mode == "dmg100p":
         per_item_limit = 10000
         candidate_limit = 260
-        food_limit = 260
         beam_width = max(beam_width, 2600)
         stat_weights = compute_dmg100p_weights(
             gearset.job or "",
@@ -2312,7 +3754,6 @@ def optimize(
     else:
         per_item_limit = 80
         candidate_limit = 110
-        food_limit = 120
         beam_width = max(beam_width, 640)
         # When target GCD is strict, widen search and prioritize speed-oriented melds.
         target_gcd = gearset.target_gcd
@@ -2325,7 +3766,6 @@ def optimize(
                 stat_weights[speed_stat_id] = max(stat_weights.get(speed_stat_id, 0.6), speed_weight)
                 per_item_limit = max(per_item_limit, 180)
                 candidate_limit = max(candidate_limit, 180)
-                food_limit = max(food_limit, 180)
                 beam_width = max(beam_width, 960)
 
     if debug_enabled:
@@ -2333,7 +3773,7 @@ def optimize(
             "[opt] start "
             f"mode={mode} job={gearset.job} slots={len(selected_items)} target_gcd={gearset.target_gcd} "
             "profile=high_precision "
-            f"beam_width={beam_width} per_item_limit={per_item_limit} candidate_limit={candidate_limit} food_limit={food_limit}"
+            f"beam_width={beam_width} per_item_limit={per_item_limit} candidate_limit={candidate_limit}"
         )
 
     per_slot_combos: Dict[str, List[Tuple[Dict[int, int], List[MateriaSlotSelection], float]]] = {}
@@ -2394,23 +3834,37 @@ def optimize(
         if debug_enabled:
             sim_log("[opt] exact_mode requested reason=high_precision_simdps")
 
-    # Candidate foods: combat foods only, searched from highest item level.
-    combat_foods = [f for f in foods if is_combat_food(f)]
+    # A single None explicitly means that no food is fixed for this run.
+    no_food_fixed = len(foods) == 1 and foods[0] is None
+    combat_foods = highest_item_level_combat_foods(foods)
     combat_foods.sort(key=lambda f: (-(f.level_item or 0), int(f.food_id or 0)))
-    if not combat_foods:
+    if not combat_foods and not no_food_fixed:
         if progress:
             progress(100, "戦闘向け食事が見つかりません")
         return []
 
-    # Candidate foods: pick ones that boost relevant stats to reduce iterations.
-    relevant_stats = {27, 22, 44}
-    relevant_stats.add(46 if gearset.job in SPELL_SPEED_JOBS else 45)
-    candidate_foods = [
-        f for f in combat_foods if any(stat in f.bonuses for stat in relevant_stats)
-    ] or combat_foods
-    candidate_foods.sort(key=lambda f: (-(f.level_item or 0), int(f.food_id or 0)))
-    candidate_foods = candidate_foods[:food_limit]
-    foods_by_id = {f.food_id: f for f in foods}
+    # Candidate foods: include every stat the current job can benefit from.
+    # Restricting this to CRT/DH/DET/speed drops TEN-only and PIE-only foods.
+    relevant_stats = set(allowed_stats)
+    main_stat_id = MAIN_STAT_BY_JOB.get(gearset.job or "")
+    if main_stat_id is not None:
+        relevant_stats.add(main_stat_id)
+    relevant_stats.add(3)  # Keep VIT/HP equivalent when pruning food candidates.
+    candidate_foods: List[Optional[FoodRecord]]
+    if no_food_fixed:
+        candidate_foods = [None]
+    else:
+        candidate_foods = [
+            f for f in combat_foods if any(stat in f.bonuses for stat in relevant_stats)
+        ] or combat_foods
+        candidate_foods = non_dominated_combat_foods(
+            candidate_foods,
+            relevant_stats,
+        )
+        candidate_foods.sort(
+            key=lambda f: (-(f.level_item or 0), int(f.food_id or 0))
+        )
+    foods_by_id = {f.food_id: f for f in foods if f is not None}
     if debug_enabled:
         sim_log(
             f"[opt] food_candidates combat={len(combat_foods)} relevant={len(candidate_foods)} "
@@ -2425,7 +3879,11 @@ def optimize(
         gearset.target_gcd,
         level=level_value,
     ) if strict_gcd_mode else None
-    speed_foods = [f for f in candidate_foods if speed_stat_id in (f.bonuses or {})]
+    speed_foods = [
+        f
+        for f in candidate_foods
+        if f is not None and speed_stat_id in (f.bonuses or {})
+    ]
     per_speed_keep = 24
     max_food_speed_bonus_cache: Dict[int, int] = {}
 
@@ -2437,11 +3895,12 @@ def optimize(
             max_food_speed_bonus_cache[raw_speed] = 0
             return 0
         best = 0
+        total_speed = int(raw_speed) + level_base_sub
         for f in speed_foods:
             bonus = (f.bonuses or {}).get(speed_stat_id)
             if not bonus:
                 continue
-            add = min(int(raw_speed * (bonus.percentage / 100)), int(bonus.maximum))
+            add = min(int(total_speed * (bonus.percentage / 100)), int(bonus.maximum))
             if add > best:
                 best = add
         max_food_speed_bonus_cache[raw_speed] = best
@@ -2490,10 +3949,7 @@ def optimize(
     # Reuse score evaluations across beam, food, and local refinement loops.
     # Keyed by combat-relevant stats + food id for the current optimize call context.
     eval_cache: Dict[Tuple[Tuple[int, ...], int], Tuple[float, float]] = {}
-    eval_cache_lock = Lock()
     cache_stat_ids = (1, 2, 3, 4, 5, 6, 19, 22, 27, 44, 45, 46)
-    if shortlist_parallel_workers is None:
-        shortlist_parallel_workers = max(1, min(8, int(os.cpu_count() or 4)))
 
     def _stats_cache_key(stats: Dict[int, int]) -> Tuple[int, ...]:
         return tuple(int(stats.get(stat_id, 0)) for stat_id in cache_stat_ids)
@@ -2534,16 +3990,11 @@ def optimize(
     ) -> Tuple[float, float]:
         food_id = int(food.food_id) if food else 0
         key = (_stats_cache_key(stats), food_id)
-        with eval_cache_lock:
-            cached = eval_cache.get(key)
+        cached = eval_cache.get(key)
         if cached is not None:
             return cached
         computed = _evaluate_direct(stats, food)
-        with eval_cache_lock:
-            existing = eval_cache.get(key)
-            if existing is not None:
-                return existing
-            eval_cache[key] = computed
+        eval_cache[key] = computed
         return computed
 
     def _build_candidate_gearset(
@@ -2560,17 +4011,16 @@ def optimize(
                 for slot, sel in gearset.items.items()
             },
             food_id=food.food_id if food else None,
+            food_simulation=bool(getattr(gearset, "food_simulation", False)),
             target_gcd=gearset.target_gcd,
             note=gearset.note,
             race=gearset.race,
             level=level_value,
         )
 
-    def _selection_meld_counter(selection) -> Counter[Tuple[int, int]]:
+    def _meld_counter(melds) -> Counter[Tuple[int, int]]:
         counter: Counter[Tuple[int, int]] = Counter()
-        if not selection:
-            return counter
-        for meld in (selection.materia or []):
+        for meld in melds or []:
             if not meld:
                 continue
             try:
@@ -2583,31 +4033,42 @@ def optimize(
             counter[(stat_id, grade)] += 1
         return counter
 
+    def _selection_meld_counter(selection) -> Counter[Tuple[int, int]]:
+        return _meld_counter(selection.materia if selection else [])
+
     baseline_meld_counters: Dict[str, Counter[Tuple[int, int]]] = {
         slot: Counter() if (no_meld_slots and slot in no_meld_slots) else _selection_meld_counter(sel)
         for slot, sel in (gearset.items or {}).items()
     }
     meld_change_cache: Dict[int, int] = {}
 
+    def _meld_map_change_count(
+        meld_map: Dict[str, List[MateriaSlotSelection]],
+    ) -> int:
+        total_changes = 0
+        slot_names = set(baseline_meld_counters.keys()) | set(meld_map.keys())
+        for slot in slot_names:
+            base_counter = baseline_meld_counters.get(slot) or Counter()
+            cand_counter = _meld_counter(meld_map.get(slot))
+            unchanged = sum(
+                min(base_count, cand_counter.get(key, 0))
+                for key, base_count in base_counter.items()
+            )
+            total_changes += max(sum(base_counter.values()), sum(cand_counter.values())) - unchanged
+        return total_changes
+
     def _meld_change_count(gs: Gearset) -> int:
         cache_key = id(gs)
         cached = meld_change_cache.get(cache_key)
         if cached is not None:
             return cached
-        total_changes = 0
-        slot_names = set(baseline_meld_counters.keys()) | set((gs.items or {}).keys())
-        for slot in slot_names:
-            base_counter = baseline_meld_counters.get(slot) or Counter()
-            cand_counter = _selection_meld_counter((gs.items or {}).get(slot))
-            unchanged = 0
-            if base_counter and cand_counter:
-                for key, base_count in base_counter.items():
-                    cand_count = cand_counter.get(key, 0)
-                    if cand_count:
-                        unchanged += min(base_count, cand_count)
-            base_total = sum(base_counter.values())
-            cand_total = sum(cand_counter.values())
-            total_changes += max(base_total, cand_total) - unchanged
+        total_changes = _meld_map_change_count(
+            {
+                slot: list(selection.materia or [])
+                for slot, selection in (gs.items or {}).items()
+                if selection is not None
+            }
+        )
         meld_change_cache[cache_key] = total_changes
         return total_changes
 
@@ -2638,7 +4099,15 @@ def optimize(
     ) -> Tuple[float, float]:
         fed_stats = apply_food(stats, food)
         gcd_stat = int(fed_stats.get(coarse_speed_stat_id, 0))
-        gcd = calc_gcd_seconds(gcd_stat + level_base_sub, gearset.job or "", level=level_value)
+        raw_speed = int(stats.get(coarse_speed_stat_id, 0))
+        total_speed = raw_speed + level_base_sub
+        speed_bonus = (food.bonuses or {}).get(coarse_speed_stat_id) if food else None
+        if speed_bonus:
+            total_speed += min(
+                int(total_speed * int(speed_bonus.percentage) / 100),
+                int(speed_bonus.maximum),
+            )
+        gcd = calc_gcd_seconds(total_speed, gearset.job or "", level=level_value)
 
         crit = fed_stats.get(27, 0)
         dh = fed_stats.get(22, 0)
@@ -2679,6 +4148,7 @@ def optimize(
             stat_id: idx for idx, stat_id in enumerate(relevant_stats_sorted)
         }
         exact_stat_tuple_len = len(relevant_stats_sorted)
+        add_exact_stat_tuples = _exact_stat_tuple_adder(exact_stat_tuple_len)
         zero_stats_key = tuple(0 for _ in range(exact_stat_tuple_len))
         speed_stat_tuple_index = relevant_stat_index.get(speed_stat_id, -1)
         exact_states = {zero_stats_key: None}
@@ -2691,18 +4161,26 @@ def optimize(
                 return []
             new_map: Dict[Tuple[int, ...], Optional[ExactStateNode]] = {}
             combos = per_slot_combos.get(slot, [])
-            combo_tuples = [
-                tuple(int(add_stats.get(stat_id, 0)) for stat_id in relevant_stats_sorted)
-                for add_stats, _melds, _score in combos
-            ]
+            unique_combo_entries: List[
+                Tuple[Tuple[int, ...], List[MateriaSlotSelection]]
+            ] = []
+            seen_combo_tuples: set[Tuple[int, ...]] = set()
+            for add_stats, melds, _score in combos:
+                add_stats_tuple = tuple(
+                    int(add_stats.get(stat_id, 0))
+                    for stat_id in relevant_stats_sorted
+                )
+                if add_stats_tuple in seen_combo_tuples:
+                    continue
+                seen_combo_tuples.add(add_stats_tuple)
+                unique_combo_entries.append((add_stats_tuple, melds))
             before_count = len(exact_states)
             limit_hit = False
             for agg_stats_tuple, parent_node in exact_states.items():
-                for combo_idx, (_add_stats, melds, _score) in enumerate(combos):
-                    add_stats_tuple = combo_tuples[combo_idx]
-                    merged_stats_tuple = tuple(
-                        agg_stats_tuple[i] + add_stats_tuple[i]
-                        for i in range(exact_stat_tuple_len)
+                for add_stats_tuple, melds in unique_combo_entries:
+                    merged_stats_tuple = add_exact_stat_tuples(
+                        agg_stats_tuple,
+                        add_stats_tuple,
                     )
                     if strict_gcd_mode and required_speed_stat is not None:
                         speed_raw = base_speed_raw + int(
@@ -2732,7 +4210,8 @@ def optimize(
                     break
             if debug_enabled:
                 sim_log(
-                    f"[opt] exact_stage slot={slot} base_states={before_count} combos={len(combos)} "
+                    f"[opt] exact_stage slot={slot} base_states={before_count} "
+                    f"combos={len(combos)} unique_combos={len(unique_combo_entries)} "
                     f"after_states={len(new_map)}"
                 )
             exact_states = new_map
@@ -2810,19 +4289,71 @@ def optimize(
                 w_ten = float(stat_weights.get(19, 1.0))
                 w_pie = float(stat_weights.get(6, 1.0))
                 w_speed_base = float(stat_weights.get(speed_stat_id, 1.0))
-                single_food = candidate_foods[0] if len(candidate_foods) == 1 else None
-                single_bonuses = single_food.bonuses if single_food else {}
-                bonus_crit = single_bonuses.get(27) if single_bonuses else None
-                bonus_dh = single_bonuses.get(22) if single_bonuses else None
-                bonus_det = single_bonuses.get(44) if single_bonuses else None
-                bonus_ten = single_bonuses.get(19) if single_bonuses else None
-                bonus_pie = single_bonuses.get(6) if single_bonuses else None
-                bonus_speed = single_bonuses.get(speed_stat_id) if single_bonuses else None
+                coarse_food_profiles = []
+                coarse_speed_profiles: List[
+                    Dict[int, Tuple[int, float, float, float, bool]]
+                ] = []
 
                 def _apply_bonus(val: int, bonus) -> int:
                     if not bonus:
                         return val
                     return val + min((val * int(bonus.percentage)) // 100, int(bonus.maximum))
+
+                exact_speed_values = {
+                    base_speed + _tuple_stat(stats_tuple, speed_idx)
+                    for stats_tuple in exact_states.keys()
+                }
+                for candidate_food in candidate_foods:
+                    bonuses = candidate_food.bonuses if candidate_food else {}
+                    coarse_food_profiles.append(
+                        (
+                            bonuses.get(27),
+                            bonuses.get(22),
+                            bonuses.get(44),
+                            bonuses.get(19),
+                            bonuses.get(6),
+                        )
+                    )
+                    bonus_speed = bonuses.get(speed_stat_id)
+                    speed_profile: Dict[
+                        int,
+                        Tuple[int, float, float, float, bool],
+                    ] = {}
+                    for speed_val in exact_speed_values:
+                        fed_speed = _apply_bonus(speed_val, bonus_speed)
+                        fed_speed_total = _apply_bonus(
+                            speed_val + level_base_sub,
+                            bonus_speed,
+                        )
+                        coarse_gcd = calc_gcd_seconds(
+                            fed_speed_total,
+                            gearset.job or "",
+                            level=level_value,
+                        )
+                        valid = gcd_meets_constraints(
+                            coarse_gcd,
+                            gearset.target_gcd,
+                            gcd_constraint,
+                        )
+                        speed_weight_local = w_speed_base
+                        if gearset.target_gcd and coarse_gcd > gearset.target_gcd:
+                            speed_weight_local += min(
+                                2.0,
+                                (coarse_gcd - gearset.target_gcd) * 3,
+                            )
+                        cast_ratio = 1.0
+                        if coarse_cpm > 0.0:
+                            expected_cpm = 60.0 / max(0.1, coarse_gcd)
+                            cast_ratio = coarse_cpm / expected_cpm
+                            cast_ratio = max(0.5, min(1.5, cast_ratio))
+                        speed_profile[speed_val] = (
+                            fed_speed,
+                            coarse_gcd,
+                            speed_weight_local,
+                            cast_ratio,
+                            valid,
+                        )
+                    coarse_speed_profiles.append(speed_profile)
 
                 for meld_stats_tuple, meld_node in exact_states.items():
                     if stop_event and stop_event.is_set():
@@ -2834,48 +4365,39 @@ def optimize(
                     pie_val = base_pie + _tuple_stat(meld_stats_tuple, pie_idx)
                     speed_val = base_speed + _tuple_stat(meld_stats_tuple, speed_idx)
 
-                    best_coarse = None
-                    if single_food is not None:
+                    best_coarse: Optional[float] = None
+                    for food_index, (
+                        bonus_crit,
+                        bonus_dh,
+                        bonus_det,
+                        bonus_ten,
+                        bonus_pie,
+                    ) in enumerate(coarse_food_profiles):
                         fed_crit = _apply_bonus(crit_val, bonus_crit)
                         fed_dh = _apply_bonus(dh_val, bonus_dh)
                         fed_det = _apply_bonus(det_val, bonus_det)
                         fed_ten = _apply_bonus(ten_val, bonus_ten)
                         fed_pie = _apply_bonus(pie_val, bonus_pie)
-                        fed_speed = _apply_bonus(speed_val, bonus_speed)
-                        coarse_gcd = calc_gcd_seconds(fed_speed + level_base_sub, gearset.job or "", level=level_value)
-                        if gcd_meets_target(coarse_gcd, gearset.target_gcd):
-                            speed_weight_local = w_speed_base
-                            if gearset.target_gcd and coarse_gcd > gearset.target_gcd:
-                                speed_weight_local += min(2.0, (coarse_gcd - gearset.target_gcd) * 3)
-                            coarse_score = (
-                                fed_crit * w_crit
-                                + fed_dh * w_dh
-                                + fed_det * w_det
-                                + fed_speed * speed_weight_local
-                                + fed_ten * w_ten
-                                + fed_pie * w_pie
-                            )
-                            cast_ratio = 1.0
-                            if coarse_cpm > 0.0:
-                                expected_cpm = 60.0 / max(0.1, coarse_gcd)
-                                cast_ratio = coarse_cpm / expected_cpm
-                                cast_ratio = max(0.5, min(1.5, cast_ratio))
-                            best_coarse = coarse_score * cast_ratio
-                    else:
-                        quick_stats = {
-                            27: crit_val,
-                            22: dh_val,
-                            44: det_val,
-                            19: ten_val,
-                            6: pie_val,
-                            speed_stat_id: speed_val,
-                        }
-                        for food in candidate_foods:
-                            coarse_score, coarse_gcd = _coarse_candidate_score(quick_stats, food)
-                            if not gcd_meets_target(coarse_gcd, gearset.target_gcd):
-                                continue
-                            if best_coarse is None or coarse_score > best_coarse:
-                                best_coarse = coarse_score
+                        (
+                            fed_speed,
+                            _coarse_gcd,
+                            speed_weight_local,
+                            cast_ratio,
+                            valid,
+                        ) = coarse_speed_profiles[food_index][speed_val]
+                        if not valid:
+                            continue
+                        coarse_score = (
+                            fed_crit * w_crit
+                            + fed_dh * w_dh
+                            + fed_det * w_det
+                            + fed_speed * speed_weight_local
+                            + fed_ten * w_ten
+                            + fed_pie * w_pie
+                        )
+                        coarse_score *= cast_ratio
+                        if best_coarse is None or coarse_score > best_coarse:
+                            best_coarse = coarse_score
                     if best_coarse is None:
                         continue
                     scored_count += 1
@@ -2996,37 +4518,44 @@ def optimize(
                 if exact_candidates is None:
                     meld_stats_tuple, meld_node = source_entry
                     combined_stats = _combined_stats_from_exact_key(meld_stats_tuple)
-                    candidate_seq = -1
                 else:
                     candidate_seq, meld_stats_tuple, meld_node = source_entry
                     evaluated_candidate_seqs.add(candidate_seq)
                     combined_stats = _combined_stats_from_exact_key(meld_stats_tuple)
                 resolved_meld_map: Optional[Dict[str, List[MateriaSlotSelection]]] = None
+                resolved_meld_changes: Optional[int] = None
                 for food in candidate_foods:
                     exact_evaluated += 1
                     score, gcd = _evaluate_with_cache(combined_stats, food)
-                    if not gcd_meets_target(gcd, gearset.target_gcd):
+                    if not gcd_meets_constraints(gcd, gearset.target_gcd, gcd_constraint):
                         continue
                     if resolved_meld_map is None:
                         resolved_meld_map = _meld_map_from_exact_node(meld_node)
-                    new_gearset = _build_candidate_gearset(resolved_meld_map, food)
+                        resolved_meld_changes = _meld_map_change_count(resolved_meld_map)
                     exact_kept += 1
                     exact_seq += 1
-                    # Heap keeps best score first; tie-break by fewer materia changes.
-                    heap_entry = (
-                        float(score),
-                        -int(_meld_change_count(new_gearset)),
-                        exact_seq,
-                        new_gearset,
-                        float(gcd),
-                    )
+                    rank = (float(score), -int(resolved_meld_changes or 0))
+                    if len(exact_heap) < exact_result_limit or rank > (
+                        exact_heap[0][0],
+                        exact_heap[0][1],
+                    ):
+                        new_gearset = _build_candidate_gearset(resolved_meld_map, food)
+                        heap_entry = (
+                            rank[0],
+                            rank[1],
+                            exact_seq,
+                            new_gearset,
+                            float(gcd),
+                        )
+                    else:
+                        continue
                     if len(exact_heap) < exact_result_limit:
                         heapq.heappush(exact_heap, heap_entry)
-                    elif (heap_entry[0], heap_entry[1]) > (exact_heap[0][0], exact_heap[0][1]):
+                    else:
                         heapq.heapreplace(exact_heap, heap_entry)
                 if progress:
-                        pct = 50 + int((idx + 1) / max(1, eval_total) * 45)
-                        progress(pct, "食事ごとに評価中")
+                    pct = 50 + int((idx + 1) / max(1, eval_total) * 45)
+                    progress(pct, "食事ごとに評価中")
             if (
                 adaptive_shortlist_enabled
                 and adaptive_fallback_candidates
@@ -3061,28 +4590,40 @@ def optimize(
                         evaluated_candidate_seqs.add(candidate_seq)
                         combined_stats = _combined_stats_from_exact_key(meld_stats_tuple)
                         resolved_meld_map: Optional[Dict[str, List[MateriaSlotSelection]]] = None
+                        resolved_meld_changes: Optional[int] = None
                         for food in candidate_foods:
                             exact_evaluated += 1
                             extra_evaluated += 1
                             score, gcd = _evaluate_with_cache(combined_stats, food)
-                            if not gcd_meets_target(gcd, gearset.target_gcd):
+                            if not gcd_meets_constraints(gcd, gearset.target_gcd, gcd_constraint):
                                 continue
                             if resolved_meld_map is None:
                                 resolved_meld_map = _meld_map_from_exact_node(meld_node)
-                            new_gearset = _build_candidate_gearset(resolved_meld_map, food)
+                                resolved_meld_changes = _meld_map_change_count(resolved_meld_map)
                             exact_kept += 1
                             extra_kept += 1
                             exact_seq += 1
-                            heap_entry = (
-                                float(score),
-                                -int(_meld_change_count(new_gearset)),
-                                exact_seq,
-                                new_gearset,
-                                float(gcd),
-                            )
+                            rank = (float(score), -int(resolved_meld_changes or 0))
+                            if len(exact_heap) < exact_result_limit or rank > (
+                                exact_heap[0][0],
+                                exact_heap[0][1],
+                            ):
+                                new_gearset = _build_candidate_gearset(
+                                    resolved_meld_map,
+                                    food,
+                                )
+                                heap_entry = (
+                                    rank[0],
+                                    rank[1],
+                                    exact_seq,
+                                    new_gearset,
+                                    float(gcd),
+                                )
+                            else:
+                                continue
                             if len(exact_heap) < exact_result_limit:
                                 heapq.heappush(exact_heap, heap_entry)
-                            elif (heap_entry[0], heap_entry[1]) > (exact_heap[0][0], exact_heap[0][1]):
+                            else:
                                 heapq.heapreplace(exact_heap, heap_entry)
                         if progress:
                             pct = 95 + int((extra_idx / max(1, len(adaptive_fallback_candidates))) * 4)
@@ -3148,7 +4689,7 @@ def optimize(
                         break
             return chosen
 
-        for slot_idx, (slot, item) in enumerate(slots_to_process):
+        for slot_idx, (slot, _item) in enumerate(slots_to_process):
             new_beam = []
             combos = per_slot_combos.get(slot, [])
             for base_stats_contrib, melds, score_est in combos:
@@ -3190,7 +4731,7 @@ def optimize(
                     speed_add = int(state[0].get(speed_stat_id, 0))
                     by_speed.setdefault(speed_add, []).append(state)
                 compact: List[Tuple[Dict[int, int], Dict[str, List[MateriaSlotSelection]], float]] = []
-                for speed_add, states in by_speed.items():
+                for states in by_speed.values():
                     states.sort(key=lambda x: x[2], reverse=True)
                     compact.extend(states[:per_speed_keep])
 
@@ -3242,7 +4783,7 @@ def optimize(
                 combined_stats[stat_id] = combined_stats.get(stat_id, 0) + val
             for food in candidate_foods:
                 coarse_score, coarse_gcd = _coarse_candidate_score(combined_stats, food)
-                if not gcd_meets_target(coarse_gcd, gearset.target_gcd):
+                if not gcd_meets_constraints(coarse_gcd, gearset.target_gcd, gcd_constraint):
                     continue
                 coarse_pool.append((coarse_score, combined_stats, meld_map, food))
         if debug_enabled:
@@ -3274,46 +4815,19 @@ def optimize(
 
             strict_evaluated = 0
             strict_kept = 0
-            use_parallel_shortlist = shortlist_parallel_workers > 1 and len(shortlisted) >= 120
-            if use_parallel_shortlist:
-                sim_log(
-                    f"[opt] shortlist_parallel enabled workers={shortlist_parallel_workers} "
-                    f"tasks={len(shortlisted)}"
-                )
-
-                def _eval_shortlisted(candidate):
-                    _coarse, combined_stats, meld_map, food = candidate
-                    score, gcd = _evaluate_with_cache(combined_stats, food)
-                    return score, gcd, meld_map, food
-
-                with ThreadPoolExecutor(max_workers=shortlist_parallel_workers) as ex:
-                    futures = [ex.submit(_eval_shortlisted, candidate) for candidate in shortlisted]
-                    for idx, fut in enumerate(as_completed(futures), 1):
-                        if stop_event and stop_event.is_set():
-                            break
-                        strict_evaluated += 1
-                        score, gcd, meld_map, food = fut.result()
-                        if gcd_meets_target(gcd, gearset.target_gcd):
-                            new_gearset = _build_candidate_gearset(meld_map, food)
-                            results.append((new_gearset, score, gcd))
-                            strict_kept += 1
-                        if progress:
-                            pct = 50 + int((idx / max(1, len(shortlisted))) * 45)
-                            progress(pct, "食事ごとに評価中")
-            else:
-                for idx, (_coarse, combined_stats, meld_map, food) in enumerate(shortlisted):
-                    if stop_event and stop_event.is_set():
-                        break
-                    strict_evaluated += 1
-                    score, gcd = _evaluate_with_cache(combined_stats, food)
-                    if not gcd_meets_target(gcd, gearset.target_gcd):
-                        continue
-                    new_gearset = _build_candidate_gearset(meld_map, food)
-                    results.append((new_gearset, score, gcd))
-                    strict_kept += 1
-                    if progress:
-                        pct = 50 + int((idx + 1) / max(1, len(shortlisted)) * 45)
-                        progress(pct, "食事ごとに評価中")
+            for idx, (_coarse, combined_stats, meld_map, food) in enumerate(shortlisted):
+                if stop_event and stop_event.is_set():
+                    break
+                strict_evaluated += 1
+                score, gcd = _evaluate_with_cache(combined_stats, food)
+                if not gcd_meets_constraints(gcd, gearset.target_gcd, gcd_constraint):
+                    continue
+                new_gearset = _build_candidate_gearset(meld_map, food)
+                results.append((new_gearset, score, gcd))
+                strict_kept += 1
+                if progress:
+                    pct = 50 + int((idx + 1) / max(1, len(shortlisted)) * 45)
+                    progress(pct, "食事ごとに評価中")
             if debug_enabled:
                 sim_log(
                     f"[opt] strict_eval_done evaluated={strict_evaluated} accepted={strict_kept}"
@@ -3334,7 +4848,7 @@ def optimize(
         for stat_id, val in add_stats.items():
             current_stats[stat_id] = current_stats.get(stat_id, 0) + val
     current_score, current_gcd = _evaluate_with_cache(current_stats, current_food)
-    if gcd_meets_target(current_gcd, gearset.target_gcd):
+    if gcd_meets_constraints(current_gcd, gearset.target_gcd, gcd_constraint):
         results.append((
             _build_candidate_gearset(current_meld_map, current_food),
             current_score,
@@ -3436,7 +4950,7 @@ def optimize(
                         merged = base_without.copy()
                         _stats_add(merged, stats, 1)
                         cand_score, cand_gcd = _evaluate_with_cache(merged, food)
-                        if not gcd_meets_target(cand_gcd, gearset.target_gcd):
+                        if not gcd_meets_constraints(cand_gcd, gearset.target_gcd, gcd_constraint):
                             continue
                         if cand_score > slot_best_score + 1e-6:
                             slot_best_score = cand_score
@@ -3461,6 +4975,7 @@ def optimize(
                     job=gs.job,
                     items=new_items,
                     food_id=gs.food_id,
+                    food_simulation=bool(getattr(gs, "food_simulation", False)),
                     target_gcd=gs.target_gcd,
                     note=gs.note,
                     race=gs.race,
@@ -3511,7 +5026,7 @@ def optimize(
             stats = _stats_for_gearset(gs)
             food = foods_by_id.get(gs.food_id) if gs.food_id is not None else None
             checked_score, checked_gcd = _evaluate_direct(stats, food)
-            if not gcd_meets_target(checked_gcd, gearset.target_gcd):
+            if not gcd_meets_constraints(checked_gcd, gearset.target_gcd, gcd_constraint):
                 final_dropped += 1
                 continue
             verified_head.append((gs, checked_score, checked_gcd))
@@ -3560,7 +5075,7 @@ def search_gearsets(
     candidate_items_by_slot: Dict[str, List[ItemRecord]],
     items_by_id: Dict[int, ItemRecord],
     materia_catalog: Dict[int, MateriaCategory],
-    foods: List[FoodRecord],
+    foods: List[Optional[FoodRecord]],
     casts: List[dict],
     fight_duration_ms: int,
     cap_table: Dict[Tuple[int, int], int],
@@ -3568,6 +5083,7 @@ def search_gearsets(
     baseline_raw_stats: Optional[Dict[int, int]] = None,
     baseline_items: Optional[Dict[str, ItemRecord]] = None,
     baseline_gcd: Optional[float] = None,
+    gcd_constraint: Optional[LogGcdConstraint] = None,
     job_mods: Optional[Dict[str, int]] = None,
     baseline_food: Optional[FoodRecord] = None,
     party_bonus: int = 0,
@@ -3577,15 +5093,30 @@ def search_gearsets(
     party_synergies: Optional[Dict[str, bool]] = None,
     crit_rate_offset: float = 0.0,
     dhit_rate_offset: float = 0.0,
+    level_sync_ilvl: Optional[int] = None,
     progress: Optional[Callable[[int, str], None]] = None,
     stop_event=None,
     finalize_progress: bool = True,
+    optimization_session: Optional[OptimizationSession] = None,
 ) -> List[Tuple[Gearset, float, float]]:
     debug_enabled = sim_debug_enabled()
     job = gearset.job or ""
     if not job:
         return []
+    if not (len(foods) == 1 and foods[0] is None):
+        foods = highest_item_level_combat_foods(foods)
     level_value = gearset_level(gearset)
+    search_target_gcd = (
+        gcd_constraint.baseline_formula_seconds
+        if gcd_constraint is not None
+        else gearset.target_gcd
+    )
+    search_score_context = _prepare_gear_search_score_context(
+        job,
+        search_target_gcd,
+        level_value,
+        mode=mode,
+    )
     preview_eval_ctx = prepare_score_eval_context(
         job,
         damage_summary,
@@ -3602,6 +5133,80 @@ def search_gearsets(
         mode,
         level_value,
     )
+    if baseline_raw_stats and baseline_items and job_mods:
+        try:
+            sensitivity_step = 20
+            base_sensitivity_score, _base_sensitivity_gcd = evaluate_score(
+                dict(baseline_raw_stats),
+                job,
+                casts,
+                fight_duration_ms,
+                gearset.target_gcd,
+                damage_summary=damage_summary,
+                job_mods=job_mods,
+                food=baseline_food,
+                party_bonus=party_bonus,
+                baseline_raw_stats=baseline_raw_stats,
+                baseline_items=baseline_items,
+                selected_items=baseline_items,
+                baseline_food=baseline_food,
+                mode=mode,
+                race=gearset.race,
+                baseline_party_bonus=baseline_party_bonus,
+                baseline_race=baseline_race,
+                party_synergies=party_synergies,
+                level=level_value,
+                crit_rate_offset=crit_rate_offset,
+                dhit_rate_offset=dhit_rate_offset,
+                eval_ctx=preview_eval_ctx,
+            )
+            raw_weights: Dict[int, float] = {}
+            for stat_id in MELDABLE_STATS:
+                test_stats = dict(baseline_raw_stats)
+                test_stats[stat_id] = int(test_stats.get(stat_id, 0)) + sensitivity_step
+                test_score, _test_gcd = evaluate_score(
+                    test_stats,
+                    job,
+                    casts,
+                    fight_duration_ms,
+                    gearset.target_gcd,
+                    damage_summary=damage_summary,
+                    job_mods=job_mods,
+                    food=baseline_food,
+                    party_bonus=party_bonus,
+                    baseline_raw_stats=baseline_raw_stats,
+                    baseline_items=baseline_items,
+                    selected_items=baseline_items,
+                    baseline_food=baseline_food,
+                    mode=mode,
+                    race=gearset.race,
+                    baseline_party_bonus=baseline_party_bonus,
+                    baseline_race=baseline_race,
+                    party_synergies=party_synergies,
+                    level=level_value,
+                    crit_rate_offset=crit_rate_offset,
+                    dhit_rate_offset=dhit_rate_offset,
+                    eval_ctx=preview_eval_ctx,
+                )
+                raw_weights[stat_id] = max(
+                    0.0,
+                    (float(test_score) - float(base_sensitivity_score)) / sensitivity_step,
+                )
+            max_weight = max(raw_weights.values(), default=0.0)
+            if max_weight > 0.0:
+                scaled_weights = {
+                    stat_id: (weight / max_weight) * 1.5
+                    for stat_id, weight in raw_weights.items()
+                }
+                search_score_context = _prepare_gear_search_score_context(
+                    job,
+                    search_target_gcd,
+                    level_value,
+                    mode=mode,
+                    stat_weights=scaled_weights,
+                )
+        except Exception:
+            logger.exception("Failed to compute mode-aware gear-search stat weights")
     total_meld_slots_cache: Dict[int, int] = {}
 
     def _total_meld_slots_cached(item: ItemRecord) -> int:
@@ -3612,6 +5217,18 @@ def search_gearsets(
         cached = total_meld_slots_for_item(item)
         total_meld_slots_cache[item_id] = cached
         return cached
+
+    def _search_relic_stats(item: Optional[ItemRecord]) -> Dict[int, int]:
+        return {
+            int(stat_id): int(value)
+            for stat_id, value in dict(
+                getattr(item, "_gear_search_relic_stats", {}) or {}
+            ).items()
+            if int(value or 0) > 0
+        }
+
+    def _search_item_key(item: ItemRecord) -> Tuple[int, Tuple[Tuple[int, int], ...]]:
+        return int(item.item_id), tuple(sorted(_search_relic_stats(item).items()))
 
     slot_priority = [
         "weapon",
@@ -3631,6 +5248,24 @@ def search_gearsets(
     if not slot_order:
         return []
 
+    def _emit_progress(
+        pct: int,
+        message: str,
+        *,
+        detail_value: Optional[int] = None,
+        detail_message: Optional[str] = None,
+    ) -> None:
+        if not progress:
+            return
+        progress(
+            pct,
+            encode_progress_message(
+                message,
+                detail_value=detail_value,
+                detail_message=detail_message,
+            ),
+        )
+
     base_slot_limits = {
         "weapon": 20,
         "offhand": 16,
@@ -3645,25 +5280,54 @@ def search_gearsets(
         "ring1": 18,
         "ring2": 18,
     }
-    beam_width = 1800
+    if int(level_sync_ilvl or 0) > 0:
+        # Synced content collapses many high-IL pieces down to the same capped
+        # profile, so the normal slot caps prune too aggressively and can drop
+        # exact-score winners before beam search ever sees them.
+        base_slot_limits.update(
+            {
+                "weapon": 40,
+                "offhand": 24,
+                "body": 40,
+                "legs": 40,
+                "head": 40,
+                "hands": 40,
+                "feet": 40,
+                "earrings": 40,
+                "necklace": 40,
+                "bracelet": 40,
+                "ring1": 40,
+                "ring2": 40,
+            }
+        )
+    beam_width = 2200
     shortlist_limit = 72
-    candidate_item_lookup_by_slot: Dict[str, Dict[int, ItemRecord]] = {}
+    refinement_diversity_extra_limit = 8
+    candidate_item_lookup_by_slot: Dict[
+        str,
+        Dict[Tuple[int, Tuple[Tuple[int, int], ...]], ItemRecord],
+    ] = {}
 
     pruned_candidates: Dict[str, List[ItemRecord]] = {}
     for slot in slot_order:
-        unique_items: Dict[int, ItemRecord] = {}
+        unique_items: Dict[Tuple[int, Tuple[Tuple[int, int], ...]], ItemRecord] = {}
         for item in candidate_items_by_slot.get(slot, []):
             if not item:
                 continue
-            unique_items[int(item.item_id)] = item
-        scored_candidates: List[Tuple[float, ItemRecord]] = []
-        for item in unique_items.values():
-            scored_candidates.append(
-                (
-                    _gear_search_item_score(item, job, gearset.target_gcd, level_value),
+            unique_items[_search_item_key(item)] = item
+        scored_candidates = [
+            (
+                _gear_search_item_score(
                     item,
-                )
+                    job,
+                    search_target_gcd,
+                    level_value,
+                    score_context=search_score_context,
+                ),
+                item,
             )
+            for item in unique_items.values()
+        ]
         scored_candidates.sort(
             key=lambda entry: (
                 -entry[0],
@@ -3673,11 +5337,14 @@ def search_gearsets(
             )
         )
         candidates = [item for _score, item in scored_candidates]
-        limit = max(1, min(len(candidates), int(base_slot_limits.get(slot, 6))))
+        slot_limit = int(base_slot_limits.get(slot, 6))
+        if slot in {"weapon", "offhand"} and any(_search_relic_stats(item) for item in candidates):
+            slot_limit = max(slot_limit, min(len(candidates), beam_width))
+        limit = max(1, min(len(candidates), slot_limit))
         pruned = candidates[:limit]
         pruned_candidates[slot] = pruned
         candidate_item_lookup_by_slot[slot] = {
-            int(item.item_id): item for item in pruned if item is not None
+            _search_item_key(item): item for item in pruned if item is not None
         }
         if debug_enabled:
             sim_log(
@@ -3701,13 +5368,30 @@ def search_gearsets(
         slot_candidates = pruned_candidates.get(slot) or []
         if not slot_candidates:
             continue
-        next_best: Dict[Tuple[Tuple[str, int], ...], Dict[str, object]] = {}
+        slot_label = SLOT_LABELS.get(slot, slot)
+        slot_total_states = max(1, len(beam))
+        slot_total_candidates = max(1, len(slot_candidates))
+        slot_total_work = max(1, slot_total_states * slot_total_candidates)
+        slot_completed_work = 0
+        slot_report_every = max(1, slot_total_work // 24)
+        overall_start_pct = 5 + int((idx / max(1, total_slots)) * 25)
+        overall_end_pct = 5 + int(((idx + 1) / max(1, total_slots)) * 25)
+        next_states: List[Dict[str, object]] = []
+        next_state_sequence = 0
+        compact_threshold = max(beam_width * 20, beam_width + slot_total_candidates)
         for state in beam:
             selected = state.get("items") or {}
             current_stats = state.get("stats") or {}
             current_meld_capacity = int(state.get("meld_capacity") or 0)
             current_weapon_damage = int(state.get("weapon_damage") or 0)
             for item in slot_candidates:
+                slot_completed_work += 1
+                if (
+                    stop_event
+                    and (slot_completed_work % 1024) == 0
+                    and stop_event.is_set()
+                ):
+                    return []
                 if slot in {"ring1", "ring2"} and item.unique:
                     other_slot = "ring1" if slot == "ring2" else "ring2"
                     other_item = selected.get(other_slot)
@@ -3722,50 +5406,75 @@ def search_gearsets(
                 new_meld_capacity = current_meld_capacity + _total_meld_slots_cached(item)
                 item_weapon_damage = max(int(item.damage_phys or 0), int(item.damage_mag or 0))
                 new_weapon_damage = max(current_weapon_damage, item_weapon_damage)
-                signature = tuple(
-                    (name, int(new_items[name].item_id))
-                    for name in slot_order[: idx + 1]
-                    if name in new_items
-                )
                 new_score = _gear_search_state_score(
                     new_stats,
                     job,
-                    gearset.target_gcd,
+                    search_target_gcd,
                     level_value,
                     weapon_damage=new_weapon_damage,
                     meld_capacity=new_meld_capacity,
+                    score_context=search_score_context,
                 )
-                existing = next_best.get(signature)
-                if existing is None or new_score > float(existing.get("score") or 0.0):
-                    next_best[signature] = {
+                new_secondary_score = _gear_search_secondary_score(
+                    new_stats,
+                    job,
+                    search_target_gcd,
+                    level_value,
+                    score_context=search_score_context,
+                )
+                next_state_sequence += 1
+                next_states.append(
+                    {
                         "score": new_score,
                         "items": new_items,
                         "stats": new_stats,
                         "meld_capacity": new_meld_capacity,
                         "weapon_damage": new_weapon_damage,
+                        "_search_sequence": next_state_sequence,
+                        "_gear_search_secondary_score": new_secondary_score,
                     }
+                )
+                if len(next_states) >= compact_threshold:
+                    next_states = _gear_search_ranked_state_union(
+                        next_states,
+                        beam_width,
+                        job,
+                        search_target_gcd,
+                        level_value,
+                        score_context=search_score_context,
+                    )
+                if progress and (
+                    slot_completed_work == 1
+                    or slot_completed_work == slot_total_work
+                    or (slot_completed_work % slot_report_every) == 0
+                ):
+                    detail_pct = int((slot_completed_work / max(1, slot_total_work)) * 100)
+                    mapped_pct = overall_start_pct + int(
+                        ((overall_end_pct - overall_start_pct) * detail_pct) / 100
+                    )
+                    _emit_progress(
+                        mapped_pct,
+                        f"装備候補を探索中: {slot_label} ({len(next_states)}候補)",
+                        detail_value=detail_pct,
+                        detail_message=f"{slot_label}検索",
+                    )
         beam = _gear_search_diversified_states(
-            list(next_best.values()),
+            next_states,
             beam_width,
             job,
-            gearset.target_gcd,
+            search_target_gcd,
             level_value,
+            score_context=search_score_context,
         )
         if progress:
-            pct = 5 + int(((idx + 1) / max(1, total_slots)) * 25)
-            progress(
-                pct,
-                f"装備候補を探索中: {SLOT_LABELS.get(slot, slot)} ({len(beam)}候補)",
+            _emit_progress(
+                overall_end_pct,
+                f"装備候補を探索中: {slot_label} ({len(beam)}候補)",
+                detail_value=100,
+                detail_message=f"{slot_label}検索",
             )
 
-    shortlist = _gear_search_diversified_states(
-        beam,
-        max(1, shortlist_limit),
-        job,
-        gearset.target_gcd,
-        level_value,
-    )
-    if not shortlist:
+    if not beam:
         return []
 
     preview_foods: List[Optional[FoodRecord]] = []
@@ -3781,26 +5490,12 @@ def search_gearsets(
     if not preview_foods:
         preview_foods.append(baseline_food)
 
-    preview_eval_cache: Dict[Tuple[Tuple[Tuple[str, int], ...], int], Tuple[float, float]] = {}
-
-    def _preview_item_signature(selected: Dict[str, ItemRecord]) -> Tuple[Tuple[str, int], ...]:
-        return tuple(
-            (slot_name, int(selected[slot_name].item_id))
-            for slot_name in slot_order
-            if slot_name in selected
-        )
-
     def _evaluate_preview_candidate(
         selected: Dict[str, ItemRecord],
         raw_stats: Dict[int, int],
         food: Optional[FoodRecord],
     ) -> Tuple[float, float]:
-        food_id = int(food.food_id) if food else 0
-        cache_key = (_preview_item_signature(selected), food_id)
-        cached = preview_eval_cache.get(cache_key)
-        if cached is not None:
-            return cached
-        computed = evaluate_score(
+        return evaluate_score(
             raw_stats,
             job,
             casts,
@@ -3825,64 +5520,363 @@ def search_gearsets(
             dhit_rate_offset=dhit_rate_offset,
             eval_ctx=preview_eval_ctx,
         )
-        preview_eval_cache[cache_key] = computed
-        return computed
+
+    def _resistance_effective_stats(
+        item: ItemRecord,
+        allocation: Dict[int, int],
+    ) -> Dict[int, int]:
+        relic_base_stats = getattr(item, "_gear_search_relic_base_stats", None)
+        base_stats = dict(
+            relic_base_stats
+            if relic_base_stats is not None
+            else (item.base_params_hq or {})
+        )
+        effective_caps = {
+            int(stat_id): int(value)
+            for stat_id, value in dict(
+                getattr(item, "_gear_search_relic_effective_caps", {}) or {}
+            ).items()
+        }
+        effective_stats = dict(base_stats)
+        for stat_id, value in allocation.items():
+            applied = min(int(value), int(effective_caps.get(int(stat_id), value)))
+            if applied > 0:
+                effective_stats[int(stat_id)] = int(effective_stats.get(int(stat_id), 0)) + applied
+        return effective_stats
+
+    def _resistance_item_with_allocation(
+        item: ItemRecord,
+        allocation: Dict[int, int],
+    ) -> ItemRecord:
+        effective_stats = _resistance_effective_stats(item, allocation)
+        candidate = ItemRecord(
+            item_id=item.item_id,
+            name=item.name,
+            name_ja=item.name_ja,
+            jobs=list(item.jobs),
+            ilvl=item.ilvl,
+            slot=item.slot,
+            materia_slots=item.materia_slots,
+            overmeld=item.overmeld,
+            base_params=dict(effective_stats),
+            base_params_hq=dict(effective_stats),
+            damage_phys=item.damage_phys,
+            damage_mag=item.damage_mag,
+            delay_ms=item.delay_ms,
+            occ_slot=item.occ_slot,
+            unique=item.unique,
+            icon_url=item.icon_url,
+        )
+        setattr(candidate, "_gear_search_relic_stats", dict(allocation))
+        for attr_name in (
+            "_gear_search_relic_kind",
+            "_gear_search_relic_config",
+            "_gear_search_relic_base_stats",
+            "_gear_search_relic_effective_caps",
+        ):
+            if hasattr(item, attr_name):
+                setattr(candidate, attr_name, getattr(item, attr_name))
+        return candidate
+
+    def _refine_resistance_preview_state(
+        state: Dict[str, object],
+    ) -> Optional[Dict[str, object]]:
+        working_items = dict(state.get("items") or {})
+        working_stats = dict(state.get("stats") or {})
+        working_score = float(state.get("preview_score") or 0.0)
+        working_gcd = float(state.get("preview_gcd") or 99.0)
+        preview_food = state.get("_preview_food")
+        changed = False
+        evaluated_moves = 0
+        refinement_error_logged = False
+        for slot_name, current_item in list(working_items.items()):
+            template_selection = (gearset.items or {}).get(slot_name)
+            if _selection_lock_item(template_selection):
+                continue
+            if str(getattr(current_item, "_gear_search_relic_kind", "") or "") != "resistance":
+                continue
+            config = dict(getattr(current_item, "_gear_search_relic_config", {}) or {})
+            stat_caps = {
+                int(stat_id): int(value)
+                for stat_id, value in dict(config.get("stat_caps", {}) or {}).items()
+                if int(value or 0) > 0
+            }
+            allocation = _search_relic_stats(current_item)
+            if not allocation or not stat_caps:
+                continue
+            allowed_stats = [
+                int(stat_id)
+                for stat_id in list(config.get("allowed_stats", []) or [])
+                if int(stat_id) in stat_caps
+            ]
+            slot_changed = False
+            for _iteration in range(6):
+                best_move = None
+                best_move_score = working_score
+                best_move_gcd = working_gcd
+                for source_stat in allowed_stats:
+                    source_value = int(allocation.get(source_stat, 0) or 0)
+                    if source_value <= 0:
+                        continue
+                    for target_stat in allowed_stats:
+                        if target_stat == source_stat:
+                            continue
+                        room = int(stat_caps[target_stat]) - int(allocation.get(target_stat, 0) or 0)
+                        max_transfer = min(source_value, room)
+                        if max_transfer <= 0:
+                            continue
+                        for transfer in range(1, max_transfer + 1):
+                            evaluated_moves += 1
+                            if (
+                                stop_event
+                                and (evaluated_moves % 256) == 0
+                                and stop_event.is_set()
+                            ):
+                                return None
+                            candidate_allocation = dict(allocation)
+                            candidate_allocation[source_stat] = source_value - transfer
+                            candidate_allocation[target_stat] = int(
+                                candidate_allocation.get(target_stat, 0)
+                            ) + transfer
+                            candidate_allocation = {
+                                stat_id: value
+                                for stat_id, value in candidate_allocation.items()
+                                if value > 0
+                            }
+                            candidate_effective_stats = _resistance_effective_stats(
+                                current_item,
+                                candidate_allocation,
+                            )
+                            candidate_stats = dict(working_stats)
+                            for stat_id, value in (current_item.base_params_hq or {}).items():
+                                candidate_stats[int(stat_id)] = int(
+                                    candidate_stats.get(int(stat_id), 0)
+                                ) - int(value or 0)
+                            for stat_id, value in candidate_effective_stats.items():
+                                candidate_stats[int(stat_id)] = int(
+                                    candidate_stats.get(int(stat_id), 0)
+                                ) + int(value or 0)
+                            try:
+                                candidate_score, candidate_gcd = _evaluate_preview_candidate(
+                                    working_items,
+                                    candidate_stats,
+                                    preview_food if isinstance(preview_food, FoodRecord) else None,
+                                )
+                            except Exception:
+                                if not refinement_error_logged:
+                                    logger.exception(
+                                        "Failed to refine resistance weapon allocation "
+                                        "(item_id=%s, allocation=%s)",
+                                        int(current_item.item_id),
+                                        candidate_allocation,
+                                    )
+                                    refinement_error_logged = True
+                                continue
+                            if candidate_score > best_move_score + 1e-9 or (
+                                abs(candidate_score - best_move_score) <= 1e-9
+                                and candidate_gcd < best_move_gcd
+                            ):
+                                best_move = (
+                                    candidate_allocation,
+                                    candidate_stats,
+                                )
+                                best_move_score = float(candidate_score)
+                                best_move_gcd = float(candidate_gcd)
+                if best_move is None:
+                    break
+                allocation, working_stats = best_move
+                current_item = _resistance_item_with_allocation(current_item, allocation)
+                working_items = dict(working_items)
+                working_items[slot_name] = current_item
+                working_score = best_move_score
+                working_gcd = best_move_gcd
+                slot_changed = True
+                changed = True
+            if slot_changed:
+                candidate_items_by_slot.setdefault(slot_name, []).append(current_item)
+                candidate_item_lookup_by_slot.setdefault(slot_name, {})[
+                    _search_item_key(current_item)
+                ] = current_item
+        if not changed:
+            return None
+        return {
+            "items": working_items,
+            "stats": working_stats,
+            "score": working_score,
+            "heuristic_score": float(state.get("heuristic_score") or 0.0),
+            "preview_score": working_score,
+            "preview_gcd": working_gcd,
+            "meld_capacity": int(state.get("meld_capacity") or 0),
+            "_gear_search_secondary_score": _gear_search_secondary_score(
+                working_stats,
+                job,
+                search_target_gcd,
+                level_value,
+                score_context=search_score_context,
+            ),
+            "_preview_food": preview_food,
+        }
 
     reranked_shortlist: List[Dict[str, object]] = []
-    for state in shortlist:
+    preview_total = len(beam)
+    preview_report_every = max(1, preview_total // 24)
+    parallel_preview_results: Dict[int, Tuple[float, float, int]] = {}
+    if optimization_session is not None:
+        preview_candidates = [
+            PreviewCandidate(
+                request_id=index,
+                selected_items=dict(state.get("items") or {}),
+                raw_stats=dict(state.get("stats") or {}),
+            )
+            for index, state in enumerate(beam)
+            if state.get("items")
+        ]
+
+        def _preview_progress(
+            completed: int,
+            total: int,
+            elapsed: float,
+            eta: Optional[float],
+        ) -> None:
+            if not progress:
+                return
+            detail_pct = int((completed / max(1, total)) * 100)
+            eta_text = ""
+            if eta is not None:
+                eta_text = f"、残り約{max(0, int(round(eta)))}秒"
+            _emit_progress(
+                30 + int(detail_pct * 4 / 100),
+                (
+                    f"装備候補を再評価中 {completed}/{total} "
+                    f"({optimization_session.worker_count}並列、"
+                    f"経過{int(elapsed)}秒{eta_text})"
+                ),
+                detail_value=detail_pct,
+                detail_message="候補再評価",
+            )
+
+        parallel_preview_results = optimization_session.evaluate_preview_batch(
+            preview_candidates,
+            job=job,
+            target_gcd=gearset.target_gcd,
+            race=gearset.race,
+            level=level_value,
+            foods=preview_foods,
+            stop_event=stop_event,
+            progress=_preview_progress,
+        )
+        if stop_event and stop_event.is_set():
+            return []
+
+    for preview_index, state in enumerate(beam, start=1):
+        if stop_event and stop_event.is_set():
+            return []
         selected_items = dict(state.get("items") or {})
         if not selected_items:
             continue
         raw_stats = dict(state.get("stats") or {})
-        preview_score = float("-inf")
-        preview_gcd = 99.0
-        for preview_food in preview_foods:
-            try:
-                candidate_score, candidate_gcd = _evaluate_preview_candidate(
-                    selected_items,
-                    raw_stats,
-                    preview_food,
-                )
-            except Exception:
-                candidate_score, candidate_gcd = 0.0, 99.0
-            if (
-                candidate_score > preview_score + 1e-9
-                or (
+        best_preview_food: Optional[FoodRecord] = None
+        if optimization_session is not None:
+            preview_score, preview_gcd, food_index = parallel_preview_results.get(
+                preview_index - 1,
+                (0.0, 99.0, -1),
+            )
+            if 0 <= food_index < len(preview_foods):
+                best_preview_food = preview_foods[food_index]
+        else:
+            preview_score = float("-inf")
+            preview_gcd = 99.0
+            for preview_food in preview_foods:
+                try:
+                    candidate_score, candidate_gcd = _evaluate_preview_candidate(
+                        selected_items,
+                        raw_stats,
+                        preview_food,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to evaluate gear-search preview candidate "
+                        "(food_id=%s, items=%s)",
+                        int(preview_food.food_id or 0) if preview_food else 0,
+                        {
+                            slot: int(item.item_id)
+                            for slot, item in selected_items.items()
+                        },
+                    )
+                    candidate_score, candidate_gcd = 0.0, 99.0
+                if candidate_score > preview_score + 1e-9 or (
                     abs(candidate_score - preview_score) <= 1e-9
                     and candidate_gcd < preview_gcd
-                )
-            ):
-                preview_score = float(candidate_score)
-                preview_gcd = float(candidate_gcd)
-        if preview_score == float("-inf"):
-            preview_score, preview_gcd = 0.0, 99.0
+                ):
+                    preview_score = float(candidate_score)
+                    preview_gcd = float(candidate_gcd)
+                    best_preview_food = preview_food
+            if preview_score == float("-inf"):
+                preview_score, preview_gcd = 0.0, 99.0
         reranked_shortlist.append(
             {
                 "items": selected_items,
-                "score": float(state.get("score") or 0.0),
+                "stats": raw_stats,
+                "score": float(preview_score),
+                "heuristic_score": float(state.get("score") or 0.0),
                 "preview_score": float(preview_score),
                 "preview_gcd": float(preview_gcd),
                 "meld_capacity": int(state.get("meld_capacity") or 0),
+                "_gear_search_secondary_score": state.get(
+                    "_gear_search_secondary_score"
+                ),
+                "_preview_food": best_preview_food,
             }
         )
 
-    reranked_shortlist.sort(
-        key=lambda entry: (
-            -float(entry.get("preview_score") or 0.0),
-            -int(entry.get("meld_capacity") or 0),
-            -float(entry.get("score") or 0.0),
-            float(entry.get("preview_gcd") or 99.0),
-        )
+        if optimization_session is None and progress and (
+            preview_index == 1
+            or preview_index == preview_total
+            or (preview_index % preview_report_every) == 0
+        ):
+            detail_pct = int((preview_index / max(1, preview_total)) * 100)
+            _emit_progress(
+                30 + int(detail_pct * 4 / 100),
+                f"装備候補を再評価中 ({preview_index}/{preview_total}件)",
+                detail_value=detail_pct,
+                detail_message="候補再評価",
+            )
+
+    refinement_seeds = _gear_search_preview_shortlist(
+        reranked_shortlist,
+        max(1, shortlist_limit),
+        refinement_diversity_extra_limit,
+        job,
+        search_target_gcd,
+        level_value,
+        score_context=search_score_context,
     )
-    shortlist = reranked_shortlist[: max(1, shortlist_limit)]
+    for refinement_seed in refinement_seeds:
+        if stop_event and stop_event.is_set():
+            return []
+        refined_state = _refine_resistance_preview_state(refinement_seed)
+        if refined_state is not None:
+            reranked_shortlist.append(refined_state)
+    shortlist = _gear_search_preview_shortlist(
+        reranked_shortlist,
+        max(1, shortlist_limit),
+        0,
+        job,
+        search_target_gcd,
+        level_value,
+        score_context=search_score_context,
+    )
     if progress:
-        progress(34, f"装備候補を再評価中 ({len(shortlist)}件)")
+        _emit_progress(
+            34,
+            f"装備候補を再評価中 ({len(shortlist)}件)",
+            detail_value=100,
+            detail_message="候補再評価",
+        )
 
     results_by_key: Dict[Tuple, Tuple[Gearset, float, float]] = {}
     total_candidates = len(shortlist)
-    candidate_parallel_workers = max(1, min(4, int(os.cpu_count() or 4)))
     optimize_result_cache: Dict[Tuple, Optional[Tuple[Gearset, float, float]]] = {}
-    optimize_result_cache_lock = Lock()
     _cache_miss = object()
 
     def _result_key_for_best(best: Tuple[Gearset, float, float]) -> Tuple:
@@ -3890,30 +5884,16 @@ def search_gearsets(
         for slot_name in GEAR_SLOTS:
             sel = (best[0].items or {}).get(slot_name)
             mats = tuple((m.base_param, m.grade) for m in (sel.materia or [])) if sel else tuple()
-            key_slots.append((slot_name, sel.item_id if sel else None, mats))
+            relic = tuple(sorted((int(stat_id), int(val)) for stat_id, val in ((getattr(sel, "relic_stats", {}) or {}).items() if sel else []) if int(val or 0) > 0))
+            key_slots.append((slot_name, sel.item_id if sel else None, mats, relic))
         return (best[0].food_id, tuple(key_slots))
 
-    def _optimize_cache_key(gs: Gearset) -> Tuple:
-        key_slots = []
-        for slot_name in GEAR_SLOTS:
-            sel = (gs.items or {}).get(slot_name)
-            mats = tuple((m.base_param, m.grade) for m in (sel.materia or [])) if sel else tuple()
-            key_slots.append(
-                (
-                    slot_name,
-                    sel.item_id if sel else None,
-                    mats,
-                    bool(getattr(sel, "lock_item", False)) if sel else False,
-                    bool(getattr(sel, "lock_materia", False)) if sel else False,
-                )
-            )
-        return (
-            gs.job,
-            gs.food_id,
-            float(gs.target_gcd or 0.0),
-            int(gs.level or 0),
-            tuple(key_slots),
-        )
+    def _optimize_cache_key(
+        gs: Gearset,
+        selected_items: Optional[Dict[str, ItemRecord]] = None,
+        no_meld_slots: Optional[set] = None,
+    ) -> Tuple:
+        return optimization_request_key(gs, selected_items, no_meld_slots)
 
     def _run_optimize_cached(
         candidate_gearset: Gearset,
@@ -3921,11 +5901,30 @@ def search_gearsets(
         no_meld_slots_override: set,
         nested_progress: Optional[Callable[[int, str], None]],
     ) -> Optional[Tuple[Gearset, float, float]]:
-        cache_key = _optimize_cache_key(candidate_gearset)
-        with optimize_result_cache_lock:
-            cached = optimize_result_cache.get(cache_key, _cache_miss)
+        cache_key = _optimize_cache_key(
+            candidate_gearset,
+            selected_items_override,
+            no_meld_slots_override,
+        )
+        cached = optimize_result_cache.get(cache_key, _cache_miss)
         if cached is not _cache_miss:
             return cached
+        if optimization_session is not None:
+            batch_results = optimization_session.optimize_batch(
+                [
+                    OptimizationRequest(
+                        request_id=0,
+                        cache_key=cache_key,
+                        gearset=candidate_gearset,
+                        selected_items=selected_items_override,
+                        no_meld_slots=no_meld_slots_override,
+                    )
+                ],
+                stop_event=stop_event,
+            )
+            best = batch_results.get(cache_key)
+            optimize_result_cache.setdefault(cache_key, best)
+            return best
         opt_results = optimize(
             candidate_gearset,
             items_by_id,
@@ -3937,7 +5936,8 @@ def search_gearsets(
             damage_summary=damage_summary,
             baseline_raw_stats=baseline_raw_stats,
             baseline_items=baseline_items,
-            baseline_gcd=None,
+            baseline_gcd=baseline_gcd,
+            gcd_constraint=gcd_constraint,
             job_mods=job_mods,
             baseline_food=baseline_food,
             party_bonus=party_bonus,
@@ -3951,18 +5951,15 @@ def search_gearsets(
             no_meld_slots=no_meld_slots_override,
             progress=nested_progress,
             stop_event=stop_event,
-            shortlist_parallel_workers=1,
         )
         best = opt_results[0] if opt_results else None
-        with optimize_result_cache_lock:
-            optimize_result_cache.setdefault(cache_key, best)
+        optimize_result_cache.setdefault(cache_key, best)
         return best
 
-    def _optimize_search_candidate(
+    def _prepare_search_candidate(
         index: int,
         state: Dict[str, object],
-        nested_progress: Optional[Callable[[int, str], None]],
-    ) -> Optional[Tuple[int, Tuple[Gearset, float, float]]]:
+    ) -> Optional[Tuple[int, Tuple, Gearset, Dict[str, ItemRecord], set]]:
         if stop_event and stop_event.is_set():
             return None
         selected_items_local = dict(state.get("items") or {})
@@ -3975,9 +5972,11 @@ def search_gearsets(
             initial_materia = []
             if _selection_lock_item(template_sel) and _selection_lock_materia(template_sel):
                 initial_materia = list(template_sel.materia or [])
+            search_relic_stats = _search_relic_stats(item)
             candidate_items[slot] = ItemSelection(
                 item_id=int(item.item_id),
                 materia=initial_materia,
+                relic_stats=search_relic_stats,
                 lock_item=_selection_lock_item(template_sel),
                 lock_materia=_selection_lock_materia(template_sel),
                 excluded_item_ids=list(getattr(template_sel, "excluded_item_ids", []) or []),
@@ -3988,11 +5987,39 @@ def search_gearsets(
             job=gearset.job,
             items=candidate_items,
             food_id=gearset.food_id,
+            food_simulation=bool(getattr(gearset, "food_simulation", False)),
             target_gcd=gearset.target_gcd,
             note=gearset.note,
             race=gearset.race,
             level=level_value,
         )
+        return (
+            index,
+            _optimize_cache_key(
+                candidate_gearset,
+                selected_items_local,
+                no_meld_slots_local,
+            ),
+            candidate_gearset,
+            selected_items_local,
+            no_meld_slots_local,
+        )
+
+    def _optimize_search_candidate(
+        index: int,
+        state: Dict[str, object],
+        nested_progress: Optional[Callable[[int, str], None]],
+    ) -> Optional[Tuple[int, Tuple[Gearset, float, float]]]:
+        prepared = _prepare_search_candidate(index, state)
+        if prepared is None:
+            return None
+        (
+            _prepared_index,
+            _cache_key,
+            candidate_gearset,
+            selected_items_local,
+            no_meld_slots_local,
+        ) = prepared
         best = _run_optimize_cached(
             candidate_gearset,
             selected_items_local,
@@ -4003,47 +6030,179 @@ def search_gearsets(
             return None
         return index, best
 
-    use_parallel_candidates = candidate_parallel_workers > 1 and total_candidates >= 4
-    if use_parallel_candidates:
-        if debug_enabled:
-            sim_log(
-                f"[gear-search] candidate_parallel enabled workers={candidate_parallel_workers} "
-                f"tasks={total_candidates}"
+    if optimization_session is not None:
+        prepared_candidates = [
+            prepared
+            for idx, state in enumerate(shortlist)
+            if (prepared := _prepare_search_candidate(idx, state)) is not None
+        ]
+        requests = [
+            OptimizationRequest(
+                request_id=idx,
+                cache_key=cache_key,
+                gearset=candidate_gearset,
+                selected_items=selected_items_local,
+                no_meld_slots=no_meld_slots_local,
             )
-        with ThreadPoolExecutor(max_workers=candidate_parallel_workers) as ex:
-            futures = [
-                ex.submit(_optimize_search_candidate, idx, state, None)
-                for idx, state in enumerate(shortlist)
-            ]
-            for completed, fut in enumerate(as_completed(futures), 1):
-                if stop_event and stop_event.is_set():
+            for (
+                idx,
+                cache_key,
+                candidate_gearset,
+                selected_items_local,
+                no_meld_slots_local,
+            ) in prepared_candidates
+        ]
+        upper_bounds: Dict[Tuple, float] = {}
+        if len(requests) > GEAR_SEARCH_REQUIRED_RESULTS:
+
+            def _bound_progress(
+                completed: int,
+                total: int,
+                elapsed: float,
+                eta: Optional[float],
+            ) -> None:
+                if not progress:
+                    return
+                detail_pct = int((completed / max(1, total)) * 100)
+                eta_text = ""
+                if eta is not None:
+                    eta_text = f"、残り約{max(0, int(round(eta)))}秒"
+                _emit_progress(
+                    35 + int(detail_pct * 5 / 100),
+                    (
+                        f"候補上限を計算中 {completed}/{total} "
+                        f"({optimization_session.worker_count}並列、経過{int(elapsed)}秒{eta_text})"
+                    ),
+                    detail_value=detail_pct,
+                    detail_message="安全な上限計算",
+                )
+
+            upper_bounds = optimization_session.evaluate_upper_bounds(
+                requests,
+                stop_event=stop_event,
+                progress=_bound_progress,
+            )
+            if stop_event and stop_event.is_set():
+                return []
+
+        pending_requests = sorted(
+            requests,
+            key=lambda request: (
+                -float(upper_bounds.get(request.cache_key, math.inf)),
+                int(request.request_id),
+            ),
+        )
+        deferred_requests: List[OptimizationRequest] = []
+        bound_pruning_enabled = bool(upper_bounds)
+        exact_started = time.perf_counter()
+        exact_evaluated_requests = 0
+        while pending_requests:
+            if stop_event and stop_event.is_set():
+                return []
+            threshold: Optional[float] = None
+            if (
+                bound_pruning_enabled
+                and len(results_by_key) >= GEAR_SEARCH_REQUIRED_RESULTS
+            ):
+                ranked_scores = sorted(
+                    (float(result[1]) for result in results_by_key.values()),
+                    reverse=True,
+                )
+                threshold = ranked_scores[GEAR_SEARCH_REQUIRED_RESULTS - 1]
+                tolerance = max(
+                    1e-7,
+                    abs(threshold) * 1e-12,
+                    score_tie_tolerance(mode),
+                )
+                retained_requests: List[OptimizationRequest] = []
+                for request in pending_requests:
+                    if (
+                        float(upper_bounds.get(request.cache_key, math.inf))
+                        >= threshold - tolerance
+                    ):
+                        retained_requests.append(request)
+                    else:
+                        deferred_requests.append(request)
+                pending_requests = retained_requests
+                if not pending_requests:
                     break
-                candidate_result = fut.result()
-                if candidate_result is None:
-                    if progress:
-                        progress(
-                            35 + int((completed / max(1, total_candidates)) * 55),
-                            f"装備候補を精査中 {completed}/{total_candidates}",
-                        )
+
+            exact_batch_size = (
+                GEAR_SEARCH_REQUIRED_RESULTS
+                if len(results_by_key) < GEAR_SEARCH_REQUIRED_RESULTS
+                else max(1, int(optimization_session.worker_count))
+            )
+            batch = pending_requests[:exact_batch_size]
+            pending_requests = pending_requests[exact_batch_size:]
+            batch_results = optimization_session.optimize_batch(
+                batch,
+                stop_event=stop_event,
+            )
+            if stop_event and stop_event.is_set():
+                return []
+            exact_evaluated_requests += len(batch)
+            for request in batch:
+                best = batch_results.get(request.cache_key)
+                optimize_result_cache.setdefault(request.cache_key, best)
+                if best is None:
                     continue
-                _idx, best = candidate_result
+                request_bound = float(
+                    upper_bounds.get(request.cache_key, math.inf)
+                )
+                bound_tolerance = max(1e-7, abs(float(best[1])) * 1e-12)
+                if (
+                    bound_pruning_enabled
+                    and math.isfinite(request_bound)
+                    and float(best[1]) > request_bound + bound_tolerance
+                ):
+                    logger.error(
+                        "Optimization upper bound violation; disabling pruning "
+                        "(request_id=%s, score=%.12f, bound=%.12f)",
+                        request.request_id,
+                        float(best[1]),
+                        request_bound,
+                    )
+                    bound_pruning_enabled = False
+                    pending_requests.extend(deferred_requests)
+                    deferred_requests.clear()
+                    pending_requests.sort(key=lambda item: int(item.request_id))
                 result_key = _result_key_for_best(best)
                 existing = results_by_key.get(result_key)
                 if existing is None or float(best[1]) > float(existing[1]):
                     results_by_key[result_key] = best
-                if progress:
-                    progress(
-                        35 + int((completed / max(1, total_candidates)) * 55),
-                        f"装備候補を精査中 {completed}/{total_candidates}",
-                    )
+            if progress:
+                elapsed = max(0.0, time.perf_counter() - exact_started)
+                processed = exact_evaluated_requests + max(
+                    0,
+                    len(deferred_requests),
+                )
+                detail_pct = int((processed / max(1, len(requests))) * 100)
+                _emit_progress(
+                    40 + int(detail_pct * 50 / 100),
+                    (
+                        f"装備候補を精査中 {exact_evaluated_requests}件実行、"
+                        f"残り最大{len(pending_requests)}件 "
+                        f"({optimization_session.worker_count}並列、経過{int(elapsed)}秒)"
+                    ),
+                    detail_value=detail_pct,
+                    detail_message="候補精査",
+                )
+        if debug_enabled and upper_bounds:
+            sim_log(
+                f"[gear-search] exact_upper_bound total={len(requests)} "
+                f"evaluated={exact_evaluated_requests} "
+                f"pruned={max(0, len(requests) - exact_evaluated_requests)}"
+            )
     else:
         for idx, state in enumerate(shortlist):
             if stop_event and stop_event.is_set():
                 return []
             if progress:
-                progress(
+                _emit_progress(
                     35 + int((idx / max(1, total_candidates)) * 55),
                     f"装備候補を精査中 {idx + 1}/{total_candidates}",
+                    detail_value=int(((idx + 1) / max(1, total_candidates)) * 100),
+                    detail_message="候補精査",
                 )
 
             def _nested_progress(pct: int, message: str, *, index: int = idx) -> None:
@@ -4052,7 +6211,12 @@ def search_gearsets(
                 candidate_start = 35 + int((index / max(1, total_candidates)) * 55)
                 candidate_span = max(1, int(55 / max(1, total_candidates)))
                 mapped = candidate_start + int((max(0, min(100, pct)) / 100.0) * candidate_span)
-                progress(min(98, mapped), f"装備候補 {index + 1}/{total_candidates}: {message}")
+                _emit_progress(
+                    min(98, mapped),
+                    f"装備候補 {index + 1}/{total_candidates}: {message}",
+                    detail_value=max(0, min(100, int(pct))),
+                    detail_message=f"候補 {index + 1}/{total_candidates}",
+                )
 
             candidate_result = _optimize_search_candidate(idx, state, _nested_progress)
             if candidate_result is None:
@@ -4075,7 +6239,8 @@ def search_gearsets(
         for slot_name in GEAR_SLOTS:
             sel = (gs.items or {}).get(slot_name)
             mats = tuple((m.base_param, m.grade) for m in (sel.materia or [])) if sel else tuple()
-            key_slots.append((slot_name, sel.item_id if sel else None, mats))
+            relic = tuple(sorted((int(stat_id), int(val)) for stat_id, val in ((getattr(sel, "relic_stats", {}) or {}).items() if sel else []) if int(val or 0) > 0))
+            key_slots.append((slot_name, sel.item_id if sel else None, mats, relic))
         return (gs.food_id, tuple(key_slots))
 
     def _resolve_search_selected_items(gs: Gearset) -> Tuple[Dict[str, ItemRecord], set]:
@@ -4087,7 +6252,17 @@ def search_gearsets(
             if not sel or not sel.item_id:
                 continue
             item_id = int(sel.item_id)
-            effective_item = candidate_item_lookup_by_slot.get(slot_name, {}).get(item_id)
+            relic_key = tuple(
+                sorted(
+                    (int(stat_id), int(value))
+                    for stat_id, value in dict(getattr(sel, "relic_stats", {}) or {}).items()
+                    if int(value or 0) > 0
+                )
+            )
+            slot_lookup = candidate_item_lookup_by_slot.get(slot_name, {})
+            effective_item = slot_lookup.get((item_id, relic_key))
+            if effective_item is None:
+                effective_item = slot_lookup.get((item_id, ()))
             if effective_item is None:
                 fallback_item = items_by_id.get(item_id)
                 if fallback_item is None:
@@ -4122,11 +6297,51 @@ def search_gearsets(
             if len(candidate_items_by_slot.get(slot) or []) > 1
             and not _selection_lock_item((gearset.items or {}).get(slot))
         ]
+        local_refine_slot_limits = {
+            "weapon": 12,
+            "offhand": 8,
+            "body": 10,
+            "legs": 10,
+            "head": 10,
+            "hands": 10,
+            "feet": 10,
+            "earrings": 8,
+            "necklace": 8,
+            "bracelet": 8,
+            "ring1": 8,
+            "ring2": 8,
+        }
+        local_refine_candidates_by_slot: Dict[str, List[ItemRecord]] = {}
+        for slot in refine_slots:
+            pool = list(candidate_items_by_slot.get(slot) or [])
+            pool.sort(
+                key=lambda item: (
+                    -_gear_search_item_score(
+                        item,
+                        job,
+                        search_target_gcd,
+                        level_value,
+                        score_context=search_score_context,
+                    ),
+                    -int(item.ilvl or 0),
+                    int(item.item_id),
+                )
+            )
+            if int(level_sync_ilvl or 0) > 0:
+                local_refine_slot_limits[slot] = max(local_refine_slot_limits.get(slot, 8), 12)
+            limit = max(1, min(len(pool), int(local_refine_slot_limits.get(slot, 3))))
+            local_refine_candidates_by_slot[slot] = pool[:limit]
+
         refine_result_limit = min(len(results), 2)
         refine_iterations = 2
         refined_candidates: List[Tuple[Gearset, float, float]] = []
         if progress:
-            progress(99, "装備候補を局所改善中")
+            _emit_progress(
+                99,
+                f"装備候補を局所改善中 0/{refine_result_limit}",
+                detail_value=0,
+                detail_message="局所改善",
+            )
         for result_index in range(refine_result_limit):
             if stop_event and stop_event.is_set():
                 break
@@ -4137,29 +6352,205 @@ def search_gearsets(
                     break
                 improved_this_round = False
                 for slot_name in refine_slots:
+                    if progress:
+                        slot_label = SLOT_LABELS.get(slot_name, slot_name)
+                        _emit_progress(
+                            99,
+                            f"装備候補を局所改善中 {result_index + 1}/{refine_result_limit}: {slot_label}",
+                            detail_value=int(((result_index + 1) / max(1, refine_result_limit)) * 100),
+                            detail_message=f"{slot_label}改善",
+                        )
                     current_sel = (best_gs.items or {}).get(slot_name)
                     current_item_id = int(current_sel.item_id) if current_sel and current_sel.item_id else 0
+                    current_relic_stats = {
+                        int(stat_id): int(value)
+                        for stat_id, value in dict(
+                            getattr(current_sel, "relic_stats", {}) or {}
+                        ).items()
+                        if int(value or 0) > 0
+                    }
+                    current_item_key = (current_item_id, tuple(sorted(current_relic_stats.items())))
                     slot_best_gs = best_gs
                     slot_best_score = best_score
                     slot_best_gcd = best_gcd
-                    for candidate_item in candidate_items_by_slot.get(slot_name, []) or []:
+                    slot_candidates = list(local_refine_candidates_by_slot.get(slot_name) or [])
+                    if (
+                        current_item_id > 0
+                        and not any(
+                            _search_item_key(item) == current_item_key
+                            for item in slot_candidates
+                        )
+                    ):
+                        current_item = candidate_item_lookup_by_slot.get(slot_name, {}).get(
+                            current_item_key
+                        )
+                        if current_item is not None:
+                            slot_candidates.insert(0, current_item)
+                    prepared_swaps: List[
+                        Tuple[
+                            Tuple,
+                            Gearset,
+                            Dict[str, ItemRecord],
+                            set,
+                        ]
+                    ] = []
+                    for candidate_item in slot_candidates:
                         candidate_item_id = int(getattr(candidate_item, "item_id", 0) or 0)
-                        if candidate_item_id <= 0 or candidate_item_id == current_item_id:
+                        candidate_relic_stats = _search_relic_stats(candidate_item)
+                        if candidate_item_id <= 0 or _search_item_key(candidate_item) == current_item_key:
                             continue
                         swapped = _clone_gearset_with_swapped_item(
                             best_gs,
                             slot_name,
                             candidate_item_id,
+                            candidate_relic_stats,
                         )
                         swapped_selected, swapped_no_meld = _resolve_search_selected_items(swapped)
                         if not swapped_selected:
                             continue
-                        swapped_best = _run_optimize_cached(
-                            swapped,
-                            swapped_selected,
-                            swapped_no_meld,
-                            None,
+                        prepared_swaps.append(
+                            (
+                                _optimize_cache_key(
+                                    swapped,
+                                    swapped_selected,
+                                    swapped_no_meld,
+                                ),
+                                swapped,
+                                swapped_selected,
+                                swapped_no_meld,
+                            )
                         )
+
+                    parallel_swap_results: Dict[
+                        Tuple,
+                        Optional[Tuple[Gearset, float, float]],
+                    ] = {}
+                    evaluated_swap_keys: set = set()
+                    if optimization_session is not None and prepared_swaps:
+                        swap_requests = [
+                            OptimizationRequest(
+                                request_id=request_index,
+                                cache_key=cache_key,
+                                gearset=swapped,
+                                selected_items=swapped_selected,
+                                no_meld_slots=swapped_no_meld,
+                            )
+                            for request_index, (
+                                cache_key,
+                                swapped,
+                                swapped_selected,
+                                swapped_no_meld,
+                            ) in enumerate(prepared_swaps)
+                        ]
+                        current_selected, current_no_meld = (
+                            _resolve_search_selected_items(best_gs)
+                        )
+                        current_bound_request = OptimizationRequest(
+                            request_id=len(swap_requests),
+                            cache_key=_optimize_cache_key(
+                                best_gs,
+                                current_selected,
+                                current_no_meld,
+                            ),
+                            gearset=best_gs,
+                            selected_items=current_selected,
+                            no_meld_slots=current_no_meld,
+                        )
+                        swap_bounds = optimization_session.evaluate_upper_bounds(
+                            swap_requests + [current_bound_request],
+                            stop_event=stop_event,
+                        )
+                        threshold_tolerance = max(
+                            1e-7,
+                            abs(float(slot_best_score)) * 1e-12,
+                        )
+                        current_bound = float(
+                            swap_bounds.get(
+                                current_bound_request.cache_key,
+                                math.inf,
+                            )
+                        )
+                        if (
+                            math.isfinite(current_bound)
+                            and float(slot_best_score)
+                            > current_bound + threshold_tolerance
+                        ):
+                            logger.error(
+                                "Optimization upper bound violation in local "
+                                "refinement; disabling swap pruning "
+                                "(score=%.12f, bound=%.12f)",
+                                float(slot_best_score),
+                                current_bound,
+                            )
+                        else:
+                            swap_requests = [
+                                request
+                                for request in swap_requests
+                                if float(
+                                    swap_bounds.get(
+                                        request.cache_key,
+                                        math.inf,
+                                    )
+                                )
+                                >= float(slot_best_score) - threshold_tolerance
+                            ]
+                        evaluated_swap_keys = {
+                            request.cache_key for request in swap_requests
+                        }
+
+                        def _swap_progress(
+                            completed: int,
+                            total: int,
+                            _elapsed: float,
+                            _eta: Optional[float],
+                        ) -> None:
+                            if not progress:
+                                return
+                            detail_pct = int((completed / max(1, total)) * 100)
+                            _emit_progress(
+                                99,
+                                (
+                                    f"装備候補を局所改善中 "
+                                    f"{result_index + 1}/{refine_result_limit}: "
+                                    f"{slot_label} {completed}/{total}"
+                                ),
+                                detail_value=detail_pct,
+                                detail_message=f"{slot_label}改善",
+                            )
+
+                        parallel_swap_results = optimization_session.optimize_batch(
+                            swap_requests,
+                            stop_event=stop_event,
+                            progress=_swap_progress,
+                        )
+
+                    for candidate_index, (
+                        cache_key,
+                        swapped,
+                        swapped_selected,
+                        swapped_no_meld,
+                    ) in enumerate(prepared_swaps, 1):
+                        if stop_event and stop_event.is_set():
+                            break
+                        if progress and optimization_session is None:
+                            _emit_progress(
+                                99,
+                                f"装備候補を局所改善中 {result_index + 1}/{refine_result_limit}: {slot_label}",
+                                detail_value=int((candidate_index / max(1, len(prepared_swaps))) * 100),
+                                detail_message=f"{slot_label}改善",
+                            )
+                        if optimization_session is not None:
+                            if cache_key not in evaluated_swap_keys:
+                                continue
+                            swapped_best = parallel_swap_results.get(cache_key)
+                            optimize_result_cache.setdefault(cache_key, swapped_best)
+                        else:
+                            swapped_best = _run_optimize_cached(
+                                swapped,
+                                swapped_selected,
+                                swapped_no_meld,
+                                None,
+                            )
                         if not swapped_best:
                             continue
                         swapped_best_gs, swapped_best_score, swapped_best_gcd = swapped_best
@@ -4194,7 +6585,12 @@ def search_gearsets(
             results = deduped_results
 
     if progress and finalize_progress:
-        progress(100, "装備検索を含む最適化が完了しました")
+        _emit_progress(
+            100,
+            "装備検索を含む最適化が完了しました",
+            detail_value=100,
+            detail_message="完了",
+        )
     if debug_enabled:
         sim_log(
             f"[gear-search] done slots={len(slot_order)} shortlist={len(shortlist)} results={len(results)}"
@@ -4207,6 +6603,7 @@ def MateriaAwareSelection(selection, melds: List[MateriaSlotSelection]):
     return type(selection)(
         item_id=selection.item_id,
         materia=list(melds),
+        relic_stats=dict(getattr(selection, "relic_stats", {}) or {}),
         lock_item=bool(getattr(selection, "lock_item", False)),
         lock_materia=bool(getattr(selection, "lock_materia", False)),
         excluded_item_ids=list(getattr(selection, "excluded_item_ids", []) or []),

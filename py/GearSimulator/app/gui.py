@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import copy
 import json
+import math
 import os
 import time
 import re
 import uuid
 from urllib.parse import quote_plus
-from datetime import datetime
 from pathlib import Path
 import hashlib
+import logging
+import traceback
 from concurrent.futures import ThreadPoolExecutor
+from itertools import combinations, permutations
 from typing import Dict, List, Optional, Tuple
 
 from PySide6.QtCore import Qt, QThreadPool, QSize, QTimer, QSignalBlocker, QUrl
@@ -19,7 +23,6 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDoubleSpinBox,
-    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -57,20 +60,38 @@ import httpx
 
 from .cache import FileCache
 from .fflogs_client import FFLogsClient
+from .gear_data_service import GearDataService
+from .gcd_analysis import LogGcdConstraint, LogGcdEstimate, build_log_gcd_constraint, estimate_log_gcd
 from .models import (
     GEAR_SLOTS,
     Gearset,
     ItemRecord,
     ItemSelection,
+    MateriaGrade,
     MateriaSlotSelection,
     SPELL_SPEED_JOBS,
 )
 from .workers import Worker
-from .utils import display_name_with_fallback, sim_log, sim_debug_enabled
+from .export_utils import (
+    duplicate_unique_ring_slot_for_export,
+    gearset_with_export_overrides,
+    normalized_export_item_ids,
+)
+from .utils import (
+    decode_progress_message,
+    display_name_with_fallback,
+    encode_progress_message,
+    sim_log,
+    sim_debug_enabled,
+)
 from .xivgear_client import XivGearClient
 from .xivapi_client import XivApiClient
 from .report_utils import extract_report_code
+from .report_cache import ReportCache
+from .saved_stats import compute_saved_stats_snapshot
+from .time_utils import timestamp_sort_value, utc_now_iso
 from .config_store import (
+    consume_config_warnings,
     ensure_config_files,
     load_auth,
     save_auth,
@@ -80,7 +101,11 @@ from .config_store import (
 from .paths import ensure_runtime_dirs, writable_cache_dir
 from . import APP_VERSION, optimizer, xivmath
 
+
+logger = logging.getLogger(__name__)
+
 DEFAULT_RACE = xivmath.DEFAULT_RACE
+FOOD_SIMULATION_DATA = "__food_simulation__"
 MAIN_STAT_LABELS = {
     1: "str",
     2: "dex",
@@ -248,123 +273,6 @@ class SplitterDragBar(QWidget):
         super().mouseReleaseEvent(event)
 
 
-class MateriaEditorDialog(QDialog):
-    _icon_cache: Dict[str, QIcon] = {}
-
-    def __init__(self, parent, item, materia_catalog, cap_table, selections, job: Optional[str] = None):
-        super().__init__(parent)
-        self.setWindowTitle("マテリア編集")
-        self.item = item
-        self.materia_catalog = materia_catalog
-        self.cap_table = cap_table
-        self.job = job
-        self.value_map = {}
-        self.combos: List[QComboBox] = []
-        self.result: List[MateriaSlotSelection] = []
-
-        self.guaranteed_slots = optimizer.guaranteed_slots_for_item(item)
-        slots_total = optimizer.total_meld_slots_for_item(item)
-
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel(f"装備: [IL{item.ilvl}] {display_name_with_fallback(getattr(item, 'name_ja', None), item.name)}"))
-        grid = QGridLayout()
-        for idx in range(slots_total):
-            label = f"スロット{idx + 1}"
-            if idx >= self.guaranteed_slots:
-                label += "（禁断）"
-            grid.addWidget(QLabel(label), idx, 0)
-            combo = QComboBox()
-            grid.addWidget(combo, idx, 1)
-            self.combos.append(combo)
-        layout.addLayout(grid)
-
-        # prefill selections
-        for idx, sel in enumerate(selections or []):
-            if idx >= len(self.combos):
-                break
-            key = (sel.base_param, sel.grade)
-            combo = self.combos[idx]
-            combo.setProperty("preferred", key)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.on_accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-        self.setLayout(layout)
-
-        for combo in self.combos:
-            combo.currentIndexChanged.connect(self.refresh_options)
-        self.refresh_options()
-
-    def on_accept(self) -> None:
-        selections: List[MateriaSlotSelection] = []
-        totals: Dict[int, int] = {}
-        for combo in self.combos:
-            data = combo.currentData()
-            if not data:
-                continue
-            base_param, grade = data
-            value = self.value_map.get((base_param, grade), 0)
-            totals[base_param] = totals.get(base_param, 0) + value
-            selections.append(MateriaSlotSelection(base_param=base_param, grade=grade))
-
-        self.result = selections
-        self.accept()
-
-    def refresh_options(self) -> None:
-        allowed_stats = optimizer.allowed_meld_stats(self.job or "")
-        for idx, combo in enumerate(self.combos):
-            current_data = combo.currentData()
-            preferred = combo.property("preferred")
-            combo.blockSignals(True)
-            combo.clear()
-            combo.addItem("未選択", None)
-            for base_param, cat in self.materia_catalog.items():
-                if base_param not in optimizer.MELDABLE_STATS:
-                    continue
-                if base_param not in allowed_stats:
-                    continue
-                allowed_grades = optimizer.allowed_grades_for_slot(self.item, cat.grades, idx)
-                if not allowed_grades:
-                    continue
-                for grade in allowed_grades:
-                    name = grade.name_ja or grade.name
-                    label = f"{name} (+{grade.value})"
-                    icon = self._get_icon(grade.icon_url)
-                    if icon:
-                        combo.addItem(icon, label, (base_param, grade.grade))
-                    else:
-                        combo.addItem(label, (base_param, grade.grade))
-                    self.value_map[(base_param, grade.grade)] = grade.value
-
-            if preferred:
-                pref_idx = combo.findData(preferred)
-                if pref_idx != -1:
-                    combo.setCurrentIndex(pref_idx)
-            if current_data:
-                idx_now = combo.findData(current_data)
-                if idx_now != -1:
-                    combo.setCurrentIndex(idx_now)
-            combo.blockSignals(False)
-
-    def _get_icon(self, url: Optional[str]) -> Optional[QIcon]:
-        if not url:
-            return None
-        cached = self._icon_cache.get(url)
-        if cached:
-            return cached
-        try:
-            resp = httpx.get(url, timeout=10)
-            resp.raise_for_status()
-            pixmap = QPixmap()
-            pixmap.loadFromData(resp.content)
-            icon = QIcon(pixmap)
-            self._icon_cache[url] = icon
-            return icon
-        except Exception:
-            return None
-
-
 STAT_ABBR = {
     27: "CRT",
     22: "DHT",
@@ -373,6 +281,57 @@ STAT_ABBR = {
     46: "SpS",
     19: "TEN",
     6: "PIE",
+}
+
+RELIC_TOTAL_CAP_BY_ILVL = {
+    515: 462,
+    535: 468,
+}
+
+RELIC_STAT_ORDER = [27, 22, 44, 45, 46, 19, 6]
+MANDERVILLE_FIXED_STAT_VALUES = (293, 293, 72)
+MANDERVILLOUS_FIXED_STAT_VALUES = (306, 306, 72)
+MANDERVILLE_PRIMARY_STAT_VALUE = 293
+MANDERVILLOUS_PRIMARY_STAT_VALUE = 306
+MANDERVILLE_TERTIARY_STAT_VALUE = 72
+MANDERVILLE_NAME_PREFIXES = (
+    "Majestic Manderville",
+    "Mandervillous",
+    "マンダヴィル・マジェスティック",
+    "マンダヴィラス",
+)
+PHANTOM_NAME_PREFIXES = (
+    "Phantom ",
+    "ファントム",
+)
+SPECIAL_WEAPON_EDIT_BUTTON_LABEL = "特殊武器補正編集"
+
+XIVGEAR_RELIC_STAT_NAME_BY_ID = {
+    27: "crit",
+    22: "dhit",
+    44: "determination",
+    45: "skillspeed",
+    46: "spellspeed",
+    19: "tenacity",
+    6: "piety",
+}
+
+XIVGEAR_RELIC_STAT_ID_BY_NAME = {
+    "crit": 27,
+    "criticalhit": 27,
+    "dhit": 22,
+    "directhit": 22,
+    "directhitrate": 22,
+    "determination": 44,
+    "det": 44,
+    "skillspeed": 45,
+    "sks": 45,
+    "spellspeed": 46,
+    "sps": 46,
+    "tenacity": 19,
+    "ten": 19,
+    "piety": 6,
+    "pie": 6,
 }
 
 
@@ -393,11 +352,101 @@ SLOT_LABELS = {
 
 
 STATS_VERSION = 4
+SCORE_META_VERSION = 2
+SCORE_MODEL_NAMES = {
+    "dmg100p": "xivgear_dmg100p",
+    "simdps": "simdps_adps",
+    "simdps_self": "simdps_ndps",
+}
 SYNC_LEVEL_INFER_THRESHOLDS = (
     (430, 70),
     (560, 80),
     (670, 90),
 )
+
+
+def _score_payload_hash(payload: object) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _score_normalize_mapping_keys(value: object) -> object:
+    if isinstance(value, dict):
+        return [
+            [repr(key), _score_normalize_mapping_keys(item)]
+            for key, item in sorted(value.items(), key=lambda pair: repr(pair[0]))
+        ]
+    if isinstance(value, (list, tuple)):
+        return [_score_normalize_mapping_keys(item) for item in value]
+    return value
+
+
+def _score_gear_payload(raw_gear: object) -> Dict[str, object]:
+    gear = raw_gear if isinstance(raw_gear, dict) else {}
+    raw_items = gear.get("items")
+    items: Dict[str, object] = {}
+    if isinstance(raw_items, dict):
+        for slot, raw_selection in sorted(raw_items.items(), key=lambda pair: str(pair[0])):
+            selection = raw_selection if isinstance(raw_selection, dict) else {}
+            raw_materia = selection.get("materia")
+            materia = []
+            if isinstance(raw_materia, list):
+                materia = [
+                    {
+                        "base_param": entry.get("base_param"),
+                        "grade": entry.get("grade"),
+                    }
+                    for entry in raw_materia
+                    if isinstance(entry, dict)
+                ]
+            raw_relic_stats = selection.get("relic_stats")
+            if not isinstance(raw_relic_stats, dict):
+                raw_relic_stats = selection.get("relicStats")
+            if not isinstance(raw_relic_stats, dict):
+                raw_relic_stats = {}
+            relic_stats = dict(sorted(raw_relic_stats.items(), key=lambda pair: str(pair[0])))
+            items[str(slot)] = {
+                "item_id": selection.get("item_id", selection.get("itemId")),
+                "materia": materia,
+                "relic_stats": relic_stats,
+            }
+    return {
+        "job": gear.get("job"),
+        "level": gear.get("level"),
+        "food_id": gear.get("foodId", gear.get("food_id")),
+        "food_simulation": bool(gear.get("foodSimulation", gear.get("food_simulation", False))),
+        "target_gcd": gear.get("target_gcd"),
+        "race": gear.get("race"),
+        "items": items,
+    }
+
+
+def _saved_score_context_payload(entry: object) -> Dict[str, object]:
+    saved = entry if isinstance(entry, dict) else {}
+    raw_context = saved.get("ui_context")
+    context = raw_context if isinstance(raw_context, dict) else {}
+    score_context_keys = (
+        "level_sync_enabled",
+        "level_sync_il",
+        "level_sync_level",
+        "calc_mode",
+        "party_bonus",
+        "crit_rate_adjust",
+        "dhit_rate_adjust",
+        "party_synergies",
+    )
+    return {
+        "mode": saved.get("mode"),
+        "gearset": _score_gear_payload(saved.get("gearset")),
+        "food_id": saved.get("food_id"),
+        "party_bonus": saved.get("party_bonus"),
+        "report_code": extract_report_code(str(saved.get("report_code") or "")) or None,
+        "fight_id": saved.get("fight_id"),
+        "actor_id": saved.get("actor_id"),
+        "stats": saved.get("stats"),
+        "stats_version": saved.get("stats_version"),
+        "ui_context": {key: context.get(key) for key in score_context_keys},
+    }
 
 JOB_ORDER = [
     "PLD",
@@ -421,17 +470,6 @@ JOB_ORDER = [
     "RDM",
     "SMN",
     "PCT",
-]
-
-RACE_OPTIONS = [
-    ("ヒューラン", [("ミッドランダー", "Midlander"), ("ハイランダー", "Highlander")]),
-    ("エレゼン", [("フォレスト", "Wildwood"), ("ダスク", "Duskwight")]),
-    ("ミコッテ", [("サンシーカー", "Seekers of the Sun"), ("ムーンキーパー", "Keepers of the Moon")]),
-    ("ルガディン", [("シーウルフ", "Sea Wolf"), ("ヘルガード", "Hellsguard")]),
-    ("ララフェル", [("プレーンフォーク", "Plainsfolk"), ("デューンフォーク", "Dunesfolk")]),
-    ("アウラ", [("アウラ・レン", "Raen"), ("アウラ・ゼラ", "Xaela")]),
-    ("ヴィエラ", [("ラヴァ", "Rava"), ("ヴィナ", "Veena")]),
-    ("ロスガル", [("ヘリオン", "Helion"), ("ロスト", "The Lost")]),
 ]
 
 JOB_NAME_MAP = {
@@ -458,15 +496,25 @@ JOB_NAME_MAP = {
     "Pictomancer": "PCT",
 }
 
+ULTIMATE_LEVEL_SYNC_IL = {
+    "UCoB": (70, 345),
+    "UWU": (70, 375),
+    "TEA": (80, 475),
+    "DSR": (90, 605),
+    "TOP": (90, 635),
+    "FRU": (100, 735),
+}
+
 # Level-sync content specific threshold where substats are effectively capped.
 # Used to aggressively collapse high IL options in synced content.
 SYNC_SUBSTAT_CAP_START_IL = {
-    345: 470,  # UCoB
-    375: 500,  # UWU
-    475: 595,  # TEA
-    605: 725,  # DSR
-    635: 760,  # TOP
+    ULTIMATE_LEVEL_SYNC_IL["UCoB"][1]: 470,
+    ULTIMATE_LEVEL_SYNC_IL["UWU"][1]: 500,
+    ULTIMATE_LEVEL_SYNC_IL["TEA"][1]: 595,
+    ULTIMATE_LEVEL_SYNC_IL["DSR"][1]: 725,
+    ULTIMATE_LEVEL_SYNC_IL["TOP"][1]: 760,
 }
+_USE_CURRENT_SYNC = object()
 
 
 class MainWindow(QMainWindow):
@@ -476,13 +524,19 @@ class MainWindow(QMainWindow):
         self.resize(1400, 900)
 
         self.cache = FileCache()
+        self.report_cache = ReportCache(self.cache)
         self.xiv_client = XivGearClient(self.cache)
+        self.gear_data_service = GearDataService(self.xiv_client)
         self.xivapi_client = XivApiClient(self.cache)
         self.ff_client = FFLogsClient()
         self.thread_pool = QThreadPool.globalInstance()
         self.icon_thread_pool = QThreadPool()
         self.icon_thread_pool.setMaxThreadCount(4)
         self.active_worker: Optional[Worker] = None
+        self._saved_stats_worker: Optional[Worker] = None
+        self._fflogs_context_locked = False
+        self._job_context_locked = False
+        self._closing = False
 
         # Data state
         self.base_params: Dict[int, object] = {}
@@ -520,7 +574,7 @@ class MainWindow(QMainWindow):
         self.slot_tables: Dict[str, QTableWidget] = {}
         self.slot_lock_item_checks: Dict[str, QCheckBox] = {}
         self.slot_lock_materia_checks: Dict[str, QCheckBox] = {}
-        self.slot_exclude_labels: Dict[str, QLabel] = {}
+        self.slot_exclude_labels: Dict[str, QToolButton] = {}
         self._optimal_variant_entries: List[Dict[str, object]] = []
         self._applying_optimal_variant_tab: bool = False
         self._materia_icon_cache: Dict[str, QIcon] = {}
@@ -535,6 +589,9 @@ class MainWindow(QMainWindow):
         self._prefetched_item_icon_urls: set = set()
         self._food_lookup_by_id: Dict[int, object] = {}
         self._job_mods_cache: Dict[str, Dict[str, int]] = {}
+        self._relic_model_cache: Dict[Tuple[int, str], Optional[Dict[str, object]]] = {}
+        self._display_sync_item_cache: Dict[Tuple[int, str, int], ItemRecord] = {}
+        self._saved_stats_cache: Dict[Tuple[str, Optional[int], int], Dict[str, int]] = {}
         self._raw_stats_cache: Dict[Tuple, Tuple[Dict[int, int], Dict[str, object]]] = {}
         self._populate_queue: List[dict] = []
         self._is_populating: bool = False
@@ -562,7 +619,6 @@ class MainWindow(QMainWindow):
         self._pending_saved_jobs: set = set()
         self._il_filter_initialized_jobs: set = set()
         self._loading_saved_jobs: bool = False
-        self._suppress_race_change: bool = False
         self._last_populated_job: Optional[str] = None
         self._simdps_baseline_gearset: Optional[Gearset] = None
         self._simdps_baseline_raw_stats: Optional[Dict[int, int]] = None
@@ -570,9 +626,17 @@ class MainWindow(QMainWindow):
         self._simdps_baseline_food: Optional[object] = None
         self._simdps_baseline_party: Optional[int] = None
         self._simdps_baseline_race: Optional[str] = None
+        self._simdps_baseline_exact: bool = False
+        self._simdps_baseline_name: Optional[str] = None
+        self._simdps_baseline_entry_id: Optional[int] = None
+        self._log_gcd_estimate: Optional[LogGcdEstimate] = None
+        self._log_gcd_constraint: Optional[LogGcdConstraint] = None
+        self._current_export_item_ids: Dict[str, int] = {}
         self._pending_saved_set_entry: Optional[dict] = None
         self._pending_saved_set_ui_context: Optional[dict] = None
         self._current_loaded_saved_set_id: Optional[int] = None
+        self._pending_saved_score_recalculation_id: Optional[int] = None
+        self._pending_saved_score_recalculation_name: Optional[str] = None
         self._auto_calc_timer = QTimer(self)
         self._auto_calc_timer.setSingleShot(True)
         self._auto_calc_timer.timeout.connect(self._update_score_preview)
@@ -584,6 +648,7 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._load_saved_auth()
+        self._show_pending_config_warnings()
         self._load_cached_gear_data()
         self._refresh_saved_sets_table()
         QTimer.singleShot(0, self._ensure_initial_job_items_loaded)
@@ -619,14 +684,33 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("全体 %p%")
         self.progress_label = QLabel("待機中")
+        self.progress_detail_bar = QProgressBar()
+        self.progress_detail_bar.setRange(0, 100)
+        self.progress_detail_bar.setValue(0)
+        self.progress_detail_bar.setFormat("項目 %p%")
+        self.progress_detail_label = QLabel("-")
         self.btn_cancel = QPushButton("キャンセル")
         self.btn_cancel.clicked.connect(self.on_cancel)
         self.btn_cancel.setEnabled(False)
+        self.btn_cancel.setVisible(False)
+
+        overall_box = QVBoxLayout()
+        overall_box.setContentsMargins(0, 0, 0, 0)
+        overall_box.setSpacing(2)
+        overall_box.addWidget(self.progress_label)
+        overall_box.addWidget(self.progress_bar)
+
+        detail_box = QVBoxLayout()
+        detail_box.setContentsMargins(0, 0, 0, 0)
+        detail_box.setSpacing(2)
+        detail_box.addWidget(self.progress_detail_label)
+        detail_box.addWidget(self.progress_detail_bar)
 
         bottom = QHBoxLayout()
-        bottom.addWidget(self.progress_bar)
-        bottom.addWidget(self.progress_label)
+        bottom.addLayout(overall_box, 1)
+        bottom.addLayout(detail_box, 1)
         bottom.addWidget(self.btn_cancel)
 
         root_layout = QVBoxLayout()
@@ -636,6 +720,7 @@ class MainWindow(QMainWindow):
         container = QWidget()
         container.setLayout(root_layout)
         self.setCentralWidget(container)
+        self.btn_cancel.hide()
 
     def _populate_race_clan_options(self) -> None:
         if not self.race_clan_combo:
@@ -646,25 +731,13 @@ class MainWindow(QMainWindow):
         self.race_clan_combo.setCurrentIndex(0)
         self.race_clan_combo.blockSignals(False)
 
-    def on_race_clan_changed(self) -> None:
-        if self._suppress_race_change:
-            return
-        self.current_gearset.race = DEFAULT_RACE
-        self.on_save_auth(silent=True)
-        self._refresh_all_slot_displays()
-        self._schedule_auto_score_update()
-
     def _current_race(self) -> Optional[str]:
         return DEFAULT_RACE
 
-    def _set_race_clan(self, clan_key: Optional[str]) -> None:
-        self._suppress_race_change = True
-        try:
-            if self.race_clan_combo:
-                self.race_clan_combo.setCurrentIndex(0)
-            self.current_gearset.race = DEFAULT_RACE
-        finally:
-            self._suppress_race_change = False
+    def _set_race_clan(self, _clan_key: Optional[str]) -> None:
+        if self.race_clan_combo:
+            self.race_clan_combo.setCurrentIndex(0)
+        self.current_gearset.race = DEFAULT_RACE
 
     def _build_fflogs_panel(self) -> QWidget:
         panel = QWidget()
@@ -677,8 +750,10 @@ class MainWindow(QMainWindow):
         self.input_report_code.setPlaceholderText("レポートコード (例: a1b2c3d4 または URL)")
         btn_load_fights = QPushButton("ファイト取得")
         btn_load_fights.clicked.connect(self.on_load_fights)
+        self.chk_force_fflogs = QCheckBox("FFLogsを強制再取得")
         top_line.addWidget(self.input_report_code)
         top_line.addWidget(btn_load_fights)
+        top_line.addWidget(self.chk_force_fflogs)
         report_layout.addLayout(top_line)
 
         self.fight_list = QListWidget()
@@ -767,6 +842,24 @@ class MainWindow(QMainWindow):
         debug_layout.addStretch(1)
         debug_group.setLayout(debug_layout)
 
+        optimize_group = QGroupBox("最適化")
+        optimize_form = QFormLayout()
+        self.optimize_worker_combo = QComboBox()
+        self.optimize_worker_combo.addItem("自動（推奨）", 0)
+        for worker_count in (1, 2, 4, 6, 8):
+            self.optimize_worker_combo.addItem(f"{worker_count}プロセス", worker_count)
+        self.optimize_worker_combo.addItem("12プロセス（高負荷）", 12)
+        self.optimize_worker_combo.addItem("16プロセス（64GB推奨）", 16)
+        self.optimize_worker_combo.setToolTip(
+            "装備シミュレーションのCPU並列数。自動はCPUと空きメモリから決定します。"
+            "12／16プロセスは処理が速くなる一方、一時メモリが大きくなります。"
+        )
+        self.optimize_worker_combo.currentIndexChanged.connect(
+            self._on_optimize_worker_changed
+        )
+        optimize_form.addRow("CPU並列数", self.optimize_worker_combo)
+        optimize_group.setLayout(optimize_form)
+
         view_group = QGroupBox("表示")
         view_layout = QVBoxLayout()
         self.chk_icon_display = QCheckBox("アイコン表示を有効化")
@@ -783,6 +876,7 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(gear_fetch_group)
         layout.addWidget(creds_group)
+        layout.addWidget(optimize_group)
         layout.addWidget(debug_group)
         layout.addWidget(view_group)
         layout.addStretch(1)
@@ -878,10 +972,23 @@ class MainWindow(QMainWindow):
         sync_line.addWidget(self.level_sync_level_combo)
         sync_line.addWidget(QLabel("目標GCD"))
         sync_line.addWidget(self.input_target_gcd)
+        self.chk_log_gcd_constraint = QCheckBox("ログGCD維持")
+        self.chk_log_gcd_constraint.setChecked(True)
+        self.chk_log_gcd_constraint.setEnabled(False)
+        self.chk_log_gcd_constraint.setToolTip("ログ実測GCDと同じ0.01秒段階の候補だけを探索します")
+        self.chk_log_gcd_constraint.toggled.connect(self._schedule_auto_score_update)
+        sync_line.addWidget(self.chk_log_gcd_constraint)
+        self.log_gcd_status_label = QLabel("ログGCD: 未取得")
+        self.log_gcd_status_label.setToolTip("キャスト取得後に実測GCDを推定します")
+        sync_line.addWidget(self.log_gcd_status_label)
 
         self.food_combo = QComboBox()
-        self.food_combo.addItem("食事なし", None)
-        self.food_combo.currentIndexChanged.connect(self._schedule_auto_score_update)
+        self.food_combo.addItem("食事なし（固定）", None)
+        self.food_combo.addItem("食事をシミュレーション", FOOD_SIMULATION_DATA)
+        self.food_combo.setToolTip(
+            "食事なしは食事を使わず固定します。食事をシミュレーションは最高IL帯の戦闘食を比較します。"
+        )
+        self.food_combo.currentIndexChanged.connect(self._on_food_combo_changed)
         self.food_il_min = QSpinBox()
         self.food_il_min.setRange(1, 9999)
         self.food_il_min.setValue(1)
@@ -921,6 +1028,7 @@ class MainWindow(QMainWindow):
         self.calc_mode.addItem("試算DPS（logs基準）", "simdps_self")
         self.calc_mode.addItem("XiVGear（Dmg/100p）", "dmg100p")
         self.calc_mode.currentIndexChanged.connect(self._schedule_auto_score_update)
+        self.calc_mode.currentIndexChanged.connect(self._refresh_log_gcd_ui)
 
         saved_group = QGroupBox("保存セット")
         saved_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Ignored)
@@ -1086,8 +1194,14 @@ class MainWindow(QMainWindow):
         self.slot_lock_materia_checks[slot] = chk_lock_materia
         header.addWidget(chk_lock_materia)
         header.addStretch(1)
-        exclude_label = QLabel("除外: 0")
-        exclude_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        exclude_label = QToolButton()
+        exclude_label.setText("除外: 0")
+        exclude_label.setAutoRaise(True)
+        exclude_label.setCursor(Qt.PointingHandCursor)
+        exclude_label.setToolTip("クリックして除外装備一覧を表示")
+        exclude_label.clicked.connect(
+            lambda _checked=False, s=slot: self._show_excluded_slot_items_dialog(s)
+        )
         self.slot_exclude_labels[slot] = exclude_label
         header.addWidget(exclude_label)
         layout.addLayout(header)
@@ -1151,7 +1265,10 @@ class MainWindow(QMainWindow):
         if sel.item_id != item_id:
             sel.item_id = item_id
             sel.materia = []
+            sel.relic_stats = {}
             self.current_gearset.items[slot] = sel
+            self._clear_export_item_override(slot)
+            self._sync_selected_saved_set_ui_context()
         self._refresh_slot_selected_display(slot)
         self._schedule_auto_score_update()
 
@@ -1170,6 +1287,7 @@ class MainWindow(QMainWindow):
         if table.currentRow() != row:
             blocker = QSignalBlocker(table)
             table.setCurrentCell(row, 0)
+            del blocker
         menu = QMenu(table)
         is_compressed = self._is_compressed_table_row(table, row)
         row_member_ids = self._row_member_ids_for_exclusion(table, row)
@@ -1202,21 +1320,53 @@ class MainWindow(QMainWindow):
             self._toggle_slot_item_exclusion(slot, [item_id], exclude=not is_excluded)
 
     # ---- Task helpers ----
-    def start_worker(self, fn, finished_cb, silent_if_busy: bool = False, **kwargs) -> None:
+    def start_worker(
+        self,
+        fn,
+        finished_cb,
+        silent_if_busy: bool = False,
+        lock_fflogs_context: bool = False,
+        lock_job_context: bool = False,
+        **kwargs,
+    ) -> bool:
         if self.active_worker:
             if not silent_if_busy and not self._suppress_busy_dialog:
                 QMessageBox.warning(self, "実行中", "別の処理が動作中です。")
-            return
+            return False
         worker = Worker(fn, **kwargs)
         self.active_worker = worker
+        if lock_fflogs_context:
+            self._set_fflogs_context_enabled(False)
+            self._fflogs_context_locked = True
+        if lock_job_context:
+            self._set_job_context_enabled(False)
+            self._job_context_locked = True
         worker.kwargs.setdefault("progress", worker.signals.progress.emit)
         worker.signals.finished.connect(
             lambda res: self._on_worker_finished(finished_cb, res), Qt.QueuedConnection
         )
         worker.signals.error.connect(self.on_worker_error, Qt.QueuedConnection)
+        worker.signals.cancelled.connect(self.on_worker_cancelled, Qt.QueuedConnection)
         worker.signals.progress.connect(self.update_progress, Qt.QueuedConnection)
         self.btn_cancel.setEnabled(True)
-        self.thread_pool.start(worker)
+        self.btn_cancel.setVisible(True)
+        try:
+            self.thread_pool.start(worker)
+        except Exception as exc:
+            self.active_worker = None
+            self.btn_cancel.setEnabled(False)
+            self.btn_cancel.setVisible(False)
+            self._unlock_fflogs_context()
+            self._unlock_job_context()
+            logger.exception("Failed to start background worker")
+            if not self._closing:
+                QMessageBox.critical(
+                    self,
+                    "開始エラー",
+                    f"バックグラウンド処理を開始できませんでした: {type(exc).__name__}",
+                )
+            return False
+        return True
 
     def _schedule_saved_sets_flush(self, immediate: bool = False) -> None:
         self._saved_sets_dirty = True
@@ -1226,19 +1376,39 @@ class MainWindow(QMainWindow):
             return
         self._saved_sets_flush_timer.start(500)
 
-    def _flush_saved_sets(self) -> None:
+    def _flush_saved_sets(self) -> bool:
         if not self._saved_sets_dirty:
-            return
-        save_saved_sets({"version": 1, "items": self.saved_sets})
+            return True
+        try:
+            save_saved_sets({"version": 1, "items": self.saved_sets})
+        except Exception as exc:
+            logger.exception("Failed to save saved sets")
+            if hasattr(self, "progress_label"):
+                self.progress_label.setText(f"保存セットの保存に失敗しました: {type(exc).__name__}")
+            return False
         self._saved_sets_dirty = False
+        return True
 
     def _on_worker_finished(self, cb, result) -> None:
         self.active_worker = None
         self.btn_cancel.setEnabled(False)
-        if cb:
-            self.update_progress(-1, "結果を反映中...")
-            cb(result)
-        self.update_progress(0, "待機中")
+        self.btn_cancel.setVisible(False)
+        if self._closing:
+            return
+        callback_error = None
+        try:
+            if cb:
+                self.update_progress(-1, "結果を反映中...")
+                cb(result)
+        except Exception:
+            callback_error = traceback.format_exc()
+        finally:
+            self._unlock_fflogs_context()
+            self._unlock_job_context()
+        if callback_error is not None:
+            self.on_worker_error(callback_error)
+            return
+        self._finish_worker_progress()
         # 保存セット用の装備データ読み込みが待機中なら開始
         if not self.active_worker:
             self._start_saved_jobs_load()
@@ -1254,19 +1424,77 @@ class MainWindow(QMainWindow):
             self._pending_score_after_worker = False
             self._schedule_auto_score_update()
 
-    def update_progress(self, value: int, message: str) -> None:
+    def _set_progress_bar_state(self, bar: QProgressBar, value: int) -> None:
         if value < 0:
-            if self.progress_bar.minimum() != 0 or self.progress_bar.maximum() != 0:
-                self.progress_bar.setRange(0, 0)
+            if bar.minimum() != 0 or bar.maximum() != 0:
+                bar.setRange(0, 0)
+            return
+        if bar.minimum() == 0 and bar.maximum() == 0:
+            bar.setRange(0, 100)
+        bar.setValue(max(0, min(100, int(value))))
+
+    def _set_detail_progress(self, value: int, message: str) -> None:
+        self._set_progress_bar_state(self.progress_detail_bar, value)
+        detail_text = str(message or "").strip() or "-"
+        self.progress_detail_label.setText(detail_text)
+
+    def _reset_detail_progress(self) -> None:
+        self._set_progress_bar_state(self.progress_detail_bar, 0)
+        self.progress_detail_label.setText("-")
+
+    def _finish_worker_progress(self) -> None:
+        completion_text = str(self.progress_label.text() or "").strip()
+        if not completion_text or completion_text == "結果を反映中...":
+            self.update_progress(0, "待機中")
+            return
+        self._set_progress_bar_state(self.progress_bar, 100)
+        self._set_detail_progress(100, completion_text)
+
+    def _parse_progress_update(
+        self,
+        message: str,
+    ) -> Tuple[str, Optional[int], Optional[str]]:
+        text, detail_value, detail_message = decode_progress_message(message)
+        if detail_value is not None or detail_message:
+            return text, detail_value, detail_message
+        match = re.match(
+            r"^(?P<label>.+?)\s+(?P<current>\d+)/(?P<total>\d+)(?::\s*(?P<extra>.+))?$",
+            text.strip(),
+        )
+        if not match:
+            return text, None, None
+        try:
+            current = int(match.group("current"))
+            total = max(1, int(match.group("total")))
+        except Exception:
+            return text, None, None
+        detail_pct = int((max(0, min(total, current)) / total) * 100)
+        detail_label = (match.group("extra") or match.group("label") or "").strip() or None
+        return text, detail_pct, detail_label
+
+    def update_progress(self, value: int, message: str) -> None:
+        text, detail_value, detail_message = self._parse_progress_update(message)
+        self._set_progress_bar_state(self.progress_bar, value)
+        overall_text = str(text or "").strip() or "待機中"
+        self.progress_label.setText(overall_text)
+        if detail_value is not None or detail_message:
+            effective_detail = detail_value if detail_value is not None else -1
+            self._set_detail_progress(effective_detail, detail_message or overall_text)
+        elif value == 0 and overall_text == "待機中":
+            self._reset_detail_progress()
+        elif value < 0:
+            self._set_detail_progress(-1, overall_text)
         else:
-            if self.progress_bar.minimum() == 0 and self.progress_bar.maximum() == 0:
-                self.progress_bar.setRange(0, 100)
-            self.progress_bar.setValue(max(0, min(100, int(value))))
-        self.progress_label.setText(message)
+            self._set_detail_progress(-1, overall_text)
 
     def on_worker_error(self, trace: str) -> None:
         self.active_worker = None
         self.btn_cancel.setEnabled(False)
+        self.btn_cancel.setVisible(False)
+        if self._closing:
+            return
+        self._unlock_fflogs_context()
+        self._unlock_job_context()
         QMessageBox.critical(self, "エラー", trace)
         self.update_progress(0, "待機中")
         if not self.active_worker:
@@ -1283,11 +1511,51 @@ class MainWindow(QMainWindow):
             self._pending_score_after_worker = False
             self._schedule_auto_score_update()
 
+    def on_worker_cancelled(self) -> None:
+        self.active_worker = None
+        self.btn_cancel.setEnabled(False)
+        self.btn_cancel.setVisible(False)
+        if self._closing:
+            return
+        self._unlock_fflogs_context()
+        self._unlock_job_context()
+        self._pending_phase_request = None
+        self._pending_gearset = None
+        self._pending_saved_set_entry = None
+        self._pending_saved_set_ui_context = None
+        self._pending_score_after_worker = False
+        self._set_progress_bar_state(self.progress_bar, 0)
+        self.progress_label.setText("キャンセルしました")
+        self._reset_detail_progress()
+        if not self.active_worker:
+            self._start_saved_jobs_load()
+
     def on_cancel(self) -> None:
         if self.active_worker:
             self.active_worker.cancel()
             self.progress_label.setText("キャンセル中...")
             self.btn_cancel.setEnabled(False)
+
+    def _set_fflogs_context_enabled(self, enabled: bool) -> None:
+        for name in ("input_report_code", "fight_list", "actor_list", "phase_list"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.setEnabled(enabled)
+
+    def _unlock_fflogs_context(self) -> None:
+        if self._fflogs_context_locked:
+            self._set_fflogs_context_enabled(True)
+            self._fflogs_context_locked = False
+
+    def _set_job_context_enabled(self, enabled: bool) -> None:
+        job_combo = getattr(self, "job_combo", None)
+        if job_combo is not None:
+            job_combo.setEnabled(enabled)
+
+    def _unlock_job_context(self) -> None:
+        if self._job_context_locked:
+            self._set_job_context_enabled(True)
+            self._job_context_locked = False
 
     # ---- Auth persistence ----
     def _apply_debug_mode(self, enabled: bool) -> None:
@@ -1316,6 +1584,30 @@ class MainWindow(QMainWindow):
             return bool(self.chk_gear_search_mode.isChecked())
         return False
 
+    def _optimization_worker_preference(self) -> int:
+        if not hasattr(self, "optimize_worker_combo"):
+            return 0
+        try:
+            return max(
+                0,
+                min(
+                    optimizer.MAX_OPTIMIZATION_WORKERS,
+                    int(self.optimize_worker_combo.currentData() or 0),
+                ),
+            )
+        except (TypeError, ValueError):
+            return 0
+
+    def _optimization_worker_count(self) -> int:
+        preference = self._optimization_worker_preference()
+        return preference or optimizer.recommended_optimization_workers()
+
+    def _on_optimize_worker_changed(self, _index: int) -> None:
+        self.on_save_auth(silent=True)
+        self.progress_label.setText(
+            f"CPU並列数を更新しました（実行時 {self._optimization_worker_count()}プロセス）"
+        )
+
     def _slot_item_lock_enabled(self, slot: str) -> bool:
         checkbox = self.slot_lock_item_checks.get(slot)
         return bool(checkbox and checkbox.isChecked())
@@ -1342,6 +1634,44 @@ class MainWindow(QMainWindow):
         if other_item_id == int(item_id):
             return other_slot
         return None
+
+    def _normalized_export_item_ids(self, raw_ids: Optional[dict]) -> Dict[str, int]:
+        return normalized_export_item_ids(raw_ids, self.items_by_id)
+
+    def _clear_export_item_override(self, slot: str) -> None:
+        if slot in self._current_export_item_ids:
+            self._current_export_item_ids.pop(slot, None)
+
+    def _duplicate_unique_ring_slot_for_export(
+        self,
+        slot: str,
+        item_id: Optional[int],
+        gearset: Optional[Gearset] = None,
+        export_item_ids: Optional[Dict[str, int]] = None,
+    ) -> Optional[str]:
+        target_gearset = gearset or self.current_gearset
+        export_ids = export_item_ids or self._current_export_item_ids
+        return duplicate_unique_ring_slot_for_export(
+            slot,
+            item_id,
+            self.items_by_id,
+            target_gearset,
+            export_ids,
+        )
+
+    def _export_item_ids_for_capture(self, gearset: Optional[Gearset] = None) -> Dict[str, int]:
+        target_gearset = gearset or self.current_gearset
+        normalized = self._normalized_export_item_ids(self._current_export_item_ids)
+        captured: Dict[str, int] = {}
+        for slot, item_id in normalized.items():
+            if self._duplicate_unique_ring_slot_for_export(slot, item_id, target_gearset, normalized) is not None:
+                continue
+            current_sel = (target_gearset.items or {}).get(slot) or ItemSelection()
+            current_item_id = int(current_sel.item_id or 0) if current_sel.item_id else 0
+            if current_item_id == item_id:
+                continue
+            captured[slot] = item_id
+        return captured
 
     def _normalize_unique_ring_duplicates(self, gear: Gearset) -> Gearset:
         if not gear or not getattr(gear, "items", None):
@@ -1434,6 +1764,7 @@ class MainWindow(QMainWindow):
         excluded_ids = self._slot_excluded_item_id_set(slot)
         if label is not None:
             label.setText(f"除外: {len(excluded_ids)}")
+            label.setEnabled(bool(excluded_ids))
         table = self.slot_tables.get(slot)
         if table is None:
             return
@@ -1521,7 +1852,7 @@ class MainWindow(QMainWindow):
         if target.get("gearset") == gear_dict:
             return
         target["gearset"] = gear_dict
-        target["saved_at"] = datetime.now().isoformat(timespec="seconds")
+        target["saved_at"] = utc_now_iso()
         entry.update(target)
         if entry_item:
             entry_item.setData(Qt.UserRole, entry)
@@ -1570,10 +1901,18 @@ class MainWindow(QMainWindow):
     def _update_optimize_button_text(self) -> None:
         if not hasattr(self, "btn_optimize"):
             return
-        if self._gear_search_enabled():
-            self.btn_optimize.setText("装備＋マテリア＋食事を最適化")
+        base = "装備＋マテリア" if self._gear_search_enabled() else "マテリア"
+        food_mode = (
+            self.food_combo.currentData()
+            if hasattr(self, "food_combo")
+            else None
+        )
+        if food_mode == FOOD_SIMULATION_DATA:
+            self.btn_optimize.setText(f"{base}＋食事を最適化")
+        elif food_mode is None:
+            self.btn_optimize.setText(f"{base}を最適化（食事なし）")
         else:
-            self.btn_optimize.setText("マテリア＋食事を最適化")
+            self.btn_optimize.setText(f"{base}を最適化（食事固定）")
 
     def _on_icon_display_toggled(self, checked: bool) -> None:
         enabled = bool(checked)
@@ -1672,6 +2011,7 @@ class MainWindow(QMainWindow):
         icon_display = bool(data.get("icon_display_enabled", True))
         icon_visible_prefetch = bool(data.get("icon_prefetch_visible_only", True))
         gear_search_mode = bool(data.get("gear_search_mode", False))
+        optimize_worker_count = int(data.get("optimize_worker_count", 0) or 0)
         crit_rate_adjust = int(data.get("crit_rate_adjust", 0) or 0)
         dhit_rate_adjust = int(data.get("dhit_rate_adjust", 0) or 0)
         if hasattr(self, "chk_icon_display"):
@@ -1688,6 +2028,11 @@ class MainWindow(QMainWindow):
             self.chk_gear_search_mode.setChecked(gear_search_mode)
             self.chk_gear_search_mode.blockSignals(False)
             self._update_optimize_button_text()
+        if hasattr(self, "optimize_worker_combo"):
+            self.optimize_worker_combo.blockSignals(True)
+            worker_index = self.optimize_worker_combo.findData(optimize_worker_count)
+            self.optimize_worker_combo.setCurrentIndex(max(0, worker_index))
+            self.optimize_worker_combo.blockSignals(False)
         if hasattr(self, "crit_rate_adjust_spin"):
             self.crit_rate_adjust_spin.blockSignals(True)
             self.crit_rate_adjust_spin.setValue(max(-20, min(20, crit_rate_adjust)))
@@ -1730,7 +2075,21 @@ class MainWindow(QMainWindow):
         self._apply_ui_state(data.get("ui_state"))
         self._restore_cached_report()
 
-    def on_save_auth(self, silent: bool = False) -> None:
+    def _show_pending_config_warnings(self) -> None:
+        warnings = consume_config_warnings()
+        if not warnings:
+            return
+        message = "\n".join(f"- {text}" for text in warnings)
+        QTimer.singleShot(
+            0,
+            lambda msg=message: QMessageBox.warning(
+                self,
+                "設定ファイルを復旧しました",
+                msg,
+            ),
+        )
+
+    def on_save_auth(self, silent: bool = False) -> bool:
         data = {
             "client_id": self.input_client_id.text().strip() if hasattr(self, "input_client_id") else "",
             "client_secret": self.input_client_secret.text().strip() if hasattr(self, "input_client_secret") else "",
@@ -1746,6 +2105,7 @@ class MainWindow(QMainWindow):
             "icon_display_enabled": self._icon_display_enabled(),
             "icon_prefetch_visible_only": self._item_icon_prefetch_visible_only(),
             "gear_search_mode": self._gear_search_enabled(),
+            "optimize_worker_count": self._optimization_worker_preference(),
             "crit_rate_adjust": self._crit_rate_adjust_percent(),
             "dhit_rate_adjust": self._dhit_rate_adjust_percent(),
         }
@@ -1753,7 +2113,17 @@ class MainWindow(QMainWindow):
             data["last_fight_id"] = self.selected_fight.get("id")
         if self.selected_actor:
             data["last_actor_id"] = self.selected_actor.get("id")
-        save_auth(data)
+        try:
+            save_auth(data)
+        except Exception as exc:
+            logger.exception("Failed to save auth settings")
+            if not silent:
+                QMessageBox.warning(
+                    self,
+                    "保存失敗",
+                    f"認証・設定情報を保存できませんでした。\n{type(exc).__name__}: {exc}",
+                )
+            return False
         self._apply_debug_mode(bool(data.get("debug_mode")))
         client_id = data.get("client_id") or ""
         client_secret = data.get("client_secret") or ""
@@ -1763,6 +2133,7 @@ class MainWindow(QMainWindow):
             self.ff_client.clear_credentials()
         if not silent:
             self.progress_label.setText("認証情報を保存しました")
+        return True
 
     def _collect_ui_state(self) -> Dict[str, object]:
         state: Dict[str, object] = {}
@@ -1845,13 +2216,18 @@ class MainWindow(QMainWindow):
             from_cache=True,
         )
 
-    def _report_cache_key(self, code: str) -> str:
-        return f"fflogs_{code}.json"
-
-    def _load_report_cache(self, code: str) -> Optional[dict]:
-        if not code:
-            return None
-        return self.cache.load(self._report_cache_key(code))
+    def _load_report_cache(
+        self,
+        code: str,
+        *,
+        sections: Optional[List[str]] = None,
+        allow_stale: bool = False,
+    ) -> Optional[dict]:
+        return self.report_cache.load(
+            code,
+            sections=sections,
+            allow_stale=allow_stale,
+        )
 
     def _save_report_cache(
         self,
@@ -1860,27 +2236,29 @@ class MainWindow(QMainWindow):
         players_by_fight: Optional[dict] = None,
         enemy_npcs: Optional[List[dict]] = None,
     ) -> None:
-        if not code:
-            return
-        data = self._load_report_cache(code) or {"code": code, "fights": [], "players_by_fight": {}}
-        if fights is not None:
-            data["fights"] = fights
-        if players_by_fight is not None:
-            data["players_by_fight"] = players_by_fight
-        if enemy_npcs is not None:
-            data["enemy_npcs"] = enemy_npcs
-        data["saved_at"] = time.time()
-        self.cache.save(self._report_cache_key(code), data)
+        try:
+            self.report_cache.save(
+                code,
+                fights=fights,
+                players_by_fight=players_by_fight,
+                enemy_npcs=enemy_npcs,
+            )
+        except (OSError, ValueError) as exc:
+            logger.warning("Failed to save FFLogs report cache: %s", exc)
+
+    def _fflogs_force_refresh_enabled(self) -> bool:
+        return bool(hasattr(self, "chk_force_fflogs") and self.chk_force_fflogs.isChecked())
 
     def _restore_cached_report(self) -> None:
         code = extract_report_code(self.input_report_code.text())
         if not code:
             return
-        cached = self._load_report_cache(code)
+        cached = self._load_report_cache(code, sections=["fights"])
         if cached and cached.get("fights"):
             self._after_fights(
                 {"fights": cached.get("fights", []), "enemy_npcs": cached.get("enemy_npcs", [])},
                 from_cache=True,
+                request_code=code,
             )
 
     def _select_fight_by_id(self, fight_id: Optional[int]) -> None:
@@ -1980,6 +2358,7 @@ class MainWindow(QMainWindow):
             "dhit_rate_adjust": self._dhit_rate_adjust_percent(),
             "party_synergies": self._selected_party_synergies(),
             "gear_search_mode": self._gear_search_enabled(),
+            "export_item_ids": self._export_item_ids_for_capture(self.current_gearset),
         }
 
     def _saved_set_ui_context(self, entry: Optional[dict], gear: Optional[Gearset] = None) -> Dict[str, object]:
@@ -1999,6 +2378,7 @@ class MainWindow(QMainWindow):
             context["party_synergies"] = {}
         if "gear_search_mode" not in context:
             context["gear_search_mode"] = False
+        context["export_item_ids"] = self._normalized_export_item_ids(context.get("export_item_ids"))
         if gear and gear.job:
             inferred = self._infer_saved_set_ui_context(entry, gear)
             for key, value in inferred.items():
@@ -2105,10 +2485,12 @@ class MainWindow(QMainWindow):
 
     def _apply_saved_set_ui_context(self, context: Optional[dict], job: Optional[str] = None) -> None:
         if not isinstance(context, dict):
+            self._current_export_item_ids = {}
             return
         context_job = context.get("job")
         if context_job and job and str(context_job) != str(job):
             return
+        self._current_export_item_ids = self._normalized_export_item_ids(context.get("export_item_ids"))
 
         widgets_to_block = [
             getattr(self, "item_il_min", None),
@@ -2200,15 +2582,6 @@ class MainWindow(QMainWindow):
         stat_id = self._main_stat_id_for_job(job)
         return MAIN_STAT_HEADERS.get(stat_id, "MAIN")
 
-    def _main_stat_from_comp(self, comp, main_stat_id: int) -> int:
-        if main_stat_id == 1:
-            return int(comp.strength)
-        if main_stat_id == 2:
-            return int(comp.dexterity)
-        if main_stat_id == 5:
-            return int(comp.mind)
-        return int(comp.intelligence)
-
     def _saved_stats_main_value(self, stats: Optional[Dict[str, int]], job: Optional[str]) -> Optional[int]:
         if not stats:
             return None
@@ -2248,52 +2621,30 @@ class MainWindow(QMainWindow):
         job = gearset.job
         if not job or not self.jobs_data:
             return None
+        resolved_food_id = self._resolve_food_id(food_id)
+        party = int(party_bonus if party_bonus is not None else self.party_bonus.value())
+        cache_key = (self._gearset_dedup_signature(gearset), resolved_food_id, party)
+        cached = self._saved_stats_cache.get(cache_key)
+        if cached is not None:
+            return dict(cached)
         raw_stats, selected_items = self._compute_raw_stats_with_melds(gearset)
-        food = self._find_food_by_id(food_id) if self.foods else None
+        food = self._find_food_by_id(resolved_food_id) if self.foods else None
         job_mods = self._get_job_mods(job)
-        meta = xivmath.JOB_META.get(job)
-        if not meta:
-            return None
-        party = party_bonus if party_bonus is not None else self.party_bonus.value()
         level_value = optimizer.gearset_level(gearset)
-
-        weapon = selected_items.get("weapon")
-        wd_phys = weapon.damage_phys if weapon else 0
-        wd_mag = weapon.damage_mag if weapon else 0
-        delay = (weapon.delay_ms or 3000) / 1000.0 if weapon else 3.0
-
-        comp = xivmath.build_computed_stats(
-            job,
-            raw_stats,
-            job_mods,
-            food.bonuses if food else None,
-            party,
-            wd_phys,
-            wd_mag,
-            delay,
-            race=DEFAULT_RACE,
+        result = compute_saved_stats_snapshot(
+            job=job,
             level=level_value,
+            raw_stats=raw_stats,
+            selected_items=selected_items,
+            food=food,
+            job_mods=job_mods,
+            party_bonus=party,
+            race=DEFAULT_RACE,
         )
-        level = xivmath.LEVEL_STATS[level_value]
-        hp_mod = job_mods.get("hp", 100)
-        hp = xivmath.vit_to_hp(level, meta.role, hp_mod, comp.vitality)
-        speed_val = comp.spellspeed if job in SPELL_SPEED_JOBS else comp.skillspeed
-        wd = max(wd_phys or 0, wd_mag or 0)
-        main_stat_id = self._main_stat_id_for_job(job)
-        main_stat_val = self._main_stat_from_comp(comp, main_stat_id)
-
-        return {
-            "wd": int(wd),
-            "hp": int(hp),
-            "level": int(level_value),
-            "main_stat_id": int(main_stat_id),
-            "main_stat": int(main_stat_val),
-            "int": int(comp.intelligence),
-            "crit": int(comp.crit),
-            "dhit": int(comp.dhit),
-            "det": int(comp.det),
-            "sps": int(speed_val),
-        }
+        if result is None:
+            return None
+        self._saved_stats_cache[cache_key] = dict(result)
+        return result
 
     def _ensure_saved_sets_jobs_loaded(self) -> bool:
         jobs_needed = set()
@@ -2329,7 +2680,12 @@ class MainWindow(QMainWindow):
             return {"jobs": jobs, "items": items}
 
         self.progress_label.setText("保存セット用の装備データを読み込み中...")
-        self.start_worker(task, self._after_saved_jobs, silent_if_busy=True)
+        self.start_worker(
+            task,
+            self._after_saved_jobs,
+            silent_if_busy=True,
+            lock_job_context=True,
+        )
 
     def _after_saved_jobs(self, payload: dict) -> None:
         self._loading_saved_jobs = False
@@ -2394,8 +2750,7 @@ class MainWindow(QMainWindow):
                 self.saved_sets_table.insertRow(row)
                 name = entry.get("name") or "セット"
                 mode = entry.get("mode") or "simdps"
-                score = entry.get("score")
-                expected_score = self._saved_expected_score_value(entry)
+                score_label, expected_score_label, score_tooltip = self._saved_score_labels(entry)
                 food_label = self._food_label_by_id(entry.get("food_id"))
                 stats = entry.get("stats")
                 if stats is not None and entry.get("stats_version") != STATS_VERSION:
@@ -2416,8 +2771,6 @@ class MainWindow(QMainWindow):
                             pending_stats.append(entry)
 
                 mode_label = "XiVGear（Dmg/100p）" if mode == "dmg100p" else "試算DPS（logs基準）"
-                score_label = self._format_saved_score(mode, score)
-                expected_score_label = self._format_saved_score(mode, expected_score)
                 gcd = self._saved_stats_gcd_value(stats, entry_job, entry_level)
                 if gcd is None:
                     gcd = entry.get("gcd")
@@ -2488,6 +2841,8 @@ class MainWindow(QMainWindow):
                         Qt.ItemIsSelectable
                         | Qt.ItemIsEnabled
                     )
+                    if score_tooltip and col in {SAVED_COL_SCORE, SAVED_COL_EXPECTED_SCORE}:
+                        item.setToolTip(score_tooltip)
                     self.saved_sets_table.setItem(row, col, item)
             if restored_row >= 0:
                 self.saved_sets_table.setCurrentCell(restored_row, SAVED_COL_NAME)
@@ -2525,42 +2880,66 @@ class MainWindow(QMainWindow):
         if self._saved_stats_worker_active:
             return
         self._saved_stats_worker_active = True
-        payload = [
-            {
-                "id": entry.get("id"),
-                "gearset": entry.get("gearset"),
-                "food_id": entry.get("food_id"),
-                "party_bonus": entry.get("party_bonus"),
-            }
-            for entry in entries
-            if entry.get("gearset")
-        ]
+        default_party_bonus = int(self.party_bonus.value())
+        payload = []
+        for entry in entries:
+            if not entry.get("gearset"):
+                continue
+            try:
+                gear = Gearset.from_dict(entry.get("gearset") or {})
+                if not gear.job or not self.jobs_data or not self._gearset_items_ready(gear):
+                    continue
+                raw_stats, selected_items = self._compute_raw_stats_with_melds(gear)
+                food_id = self._resolve_food_id(entry.get("food_id"))
+                food = self._find_food_by_id(food_id) if self.foods else None
+                payload.append(
+                    {
+                        "id": entry.get("id"),
+                        "job": gear.job,
+                        "level": optimizer.gearset_level(gear),
+                        "raw_stats": dict(raw_stats),
+                        "selected_items": dict(selected_items),
+                        "food": food,
+                        "job_mods": self._get_job_mods(gear.job),
+                        "party_bonus": int(
+                            entry.get("party_bonus")
+                            if entry.get("party_bonus") is not None
+                            else default_party_bonus
+                        ),
+                        "race": DEFAULT_RACE,
+                    }
+                )
+            except (TypeError, ValueError):
+                logger.warning("Skipped invalid saved-set statistics entry %s", entry.get("id"))
 
         def task(stop_event=None, progress=None):
             results = []
             for entry in payload:
-                gear = Gearset.from_dict(entry.get("gearset") or {})
-                if not gear.job:
-                    continue
-                if not self.jobs_data:
-                    continue
-                if not self._gearset_items_ready(gear):
-                    continue
-                stats = self._compute_saved_stats(
-                    gear,
-                    entry.get("food_id"),
-                    entry.get("party_bonus"),
+                if stop_event and stop_event.is_set():
+                    break
+                stats = compute_saved_stats_snapshot(
+                    job=entry["job"],
+                    level=entry["level"],
+                    raw_stats=entry["raw_stats"],
+                    selected_items=entry["selected_items"],
+                    food=entry["food"],
+                    job_mods=entry["job_mods"],
+                    party_bonus=entry["party_bonus"],
+                    race=entry["race"],
                 )
                 if stats:
                     results.append((entry.get("id"), stats))
             return results
 
         worker = Worker(task)
+        self._saved_stats_worker = worker
         worker.signals.finished.connect(self._after_saved_stats_compute, Qt.QueuedConnection)
         worker.signals.error.connect(self._after_saved_stats_error, Qt.QueuedConnection)
+        worker.signals.cancelled.connect(self._after_saved_stats_cancelled, Qt.QueuedConnection)
         self.thread_pool.start(worker)
 
     def _after_saved_stats_compute(self, results) -> None:
+        self._saved_stats_worker = None
         self._saved_stats_worker_active = False
         if not results:
             return
@@ -2577,6 +2956,11 @@ class MainWindow(QMainWindow):
             self._refresh_saved_sets_table()
 
     def _after_saved_stats_error(self, _trace: str) -> None:
+        self._saved_stats_worker = None
+        self._saved_stats_worker_active = False
+
+    def _after_saved_stats_cancelled(self) -> None:
+        self._saved_stats_worker = None
         self._saved_stats_worker_active = False
 
     def _set_last_eval(self, mode: str, score: float, gcd: float, expected_score: Optional[float] = None) -> None:
@@ -2598,7 +2982,406 @@ class MainWindow(QMainWindow):
     def _format_saved_score(self, mode: str, score: Optional[float]) -> str:
         if score is None:
             return "-"
-        return f"{float(score):.2f}" if mode == "dmg100p" else f"{float(score):.1f}"
+        try:
+            value = float(score)
+        except (TypeError, ValueError):
+            return "-"
+        if not math.isfinite(value):
+            return "-"
+        return f"{value:.2f}" if mode == "dmg100p" else f"{value:.1f}"
+
+    @staticmethod
+    def _saved_numeric_changed(old_value: object, new_value: float) -> bool:
+        try:
+            old_numeric = float(old_value)
+        except (TypeError, ValueError):
+            return True
+        return not math.isfinite(old_numeric) or abs(old_numeric - float(new_value)) > 1e-9
+
+    def _saved_score_labels(self, entry: dict) -> Tuple[str, str, str]:
+        mode = str(entry.get("mode") or "simdps")
+        score = entry.get("score")
+        expected_score = self._saved_expected_score_value(entry)
+        score_valid, message = self._saved_score_validation(entry)
+        if score is None or score_valid:
+            return (
+                self._format_saved_score(mode, score),
+                self._format_saved_score(mode, expected_score),
+                "",
+            )
+        old_score = self._format_saved_score(mode, score)
+        old_expected = self._format_saved_score(mode, expected_score)
+        tooltip = f"{message}\n以前の保存値: {{value}}"
+        return "要再計算", "要再計算", tooltip.format(value=f"{old_score} / {old_expected}")
+
+    @staticmethod
+    def _score_baseline_hash(gear: Gearset, party_bonus: int, race: Optional[str]) -> str:
+        return _score_payload_hash(
+            {
+                "gearset": _score_gear_payload(gear.to_dict()),
+                "party_bonus": int(party_bonus),
+                "race": race or gear.race or DEFAULT_RACE,
+            }
+        )
+
+    @staticmethod
+    def _score_log_data_hash(summary: Dict[str, object]) -> str:
+        return _score_payload_hash(_score_normalize_mapping_keys(summary))
+
+    def _score_data_hash_for_entry(self, entry: dict) -> Optional[str]:
+        gear_data = entry.get("gearset")
+        if not isinstance(gear_data, dict):
+            return None
+        gear = Gearset.from_dict(gear_data)
+        jobs_data = getattr(self, "jobs_data", {})
+        items_by_id = getattr(self, "items_by_id", {})
+        base_params = getattr(self, "base_params", {})
+        item_levels = getattr(self, "item_levels", {})
+        if not gear.job or gear.job not in jobs_data or not base_params or not item_levels:
+            return None
+        item_payload: Dict[str, object] = {}
+        materia_payload: List[Tuple[str, int, int, int]] = []
+        relevant_item_levels = set()
+        for slot, selection in sorted((gear.items or {}).items()):
+            item_id = int(selection.item_id or 0)
+            if item_id <= 0:
+                continue
+            item = items_by_id.get(item_id)
+            if item is None:
+                return None
+            item_payload[slot] = {
+                "item_id": int(item.item_id),
+                "ilvl": int(item.ilvl),
+                "slot": item.slot,
+                "occ_slot": item.occ_slot,
+                "base_params": item.base_params,
+                "base_params_hq": item.base_params_hq,
+                "damage_phys": item.damage_phys,
+                "damage_mag": item.damage_mag,
+                "delay_ms": item.delay_ms,
+            }
+            relevant_item_levels.add(int(item.ilvl))
+            for materia in selection.materia or []:
+                value = self._materia_value(int(materia.base_param), int(materia.grade))
+                if value <= 0:
+                    return None
+                materia_payload.append((slot, int(materia.base_param), int(materia.grade), int(value)))
+
+        raw_context = entry.get("ui_context")
+        context = raw_context if isinstance(raw_context, dict) else {}
+        if context.get("level_sync_enabled"):
+            try:
+                relevant_item_levels.add(int(context.get("level_sync_il")))
+            except (TypeError, ValueError):
+                return None
+        item_level_payload = {}
+        for ilvl in sorted(relevant_item_levels):
+            row = item_levels.get(ilvl)
+            if row is None:
+                return None
+            item_level_payload[ilvl] = row
+        base_param_payload = {}
+        for stat_id in optimizer.MELDABLE_STATS:
+            record = base_params.get(stat_id)
+            if record is None:
+                continue
+            base_param_payload[int(stat_id)] = {
+                "meld_param": getattr(record, "meld_param", []),
+                "slots": getattr(record, "slots", {}),
+            }
+
+        food_payload = None
+        food_id = entry.get("food_id")
+        if food_id is not None:
+            food = self._find_food_by_id(food_id)
+            if food is None:
+                return None
+            food_payload = {
+                "food_id": int(food.food_id),
+                "level_item": food.level_item,
+                "hq": bool(food.hq),
+                "bonuses": {
+                    int(stat_id): {
+                        "percentage": int(bonus.percentage),
+                        "maximum": int(bonus.maximum),
+                    }
+                    for stat_id, bonus in sorted(food.bonuses.items())
+                },
+            }
+        return _score_payload_hash(
+            {
+                "stats_version": STATS_VERSION,
+                "items": item_payload,
+                "item_levels": item_level_payload,
+                "base_params": base_param_payload,
+                "materia": materia_payload,
+                "food": food_payload,
+                "job_mods": self._get_job_mods(gear.job),
+                "level_data": xivmath.LEVEL_STATS.get(gear.level),
+            }
+        )
+
+    def _entry_with_current_score_context(
+        self,
+        entry: dict,
+        mode: str,
+        stats: Optional[Dict[str, int]],
+    ) -> dict:
+        snapshot = dict(entry)
+        snapshot.update(
+            {
+                "mode": mode,
+                "food_id": self.current_gearset.food_id,
+                "gearset": self.current_gearset.to_dict(),
+                "party_bonus": self.party_bonus.value(),
+                "ui_context": self._capture_saved_set_ui_context(self.current_gearset.job),
+                "report_code": extract_report_code(self.input_report_code.text()),
+                "fight_id": self.selected_fight.get("id") if self.selected_fight else None,
+                "actor_id": self.selected_actor.get("id") if self.selected_actor else None,
+                "stats": stats,
+                "stats_version": STATS_VERSION if stats else None,
+            }
+        )
+        return snapshot
+
+    def _saved_score_context_matches_current(
+        self,
+        entry: dict,
+        mode: str,
+        stats: Optional[Dict[str, int]],
+    ) -> bool:
+        current = _saved_score_context_payload(
+            self._entry_with_current_score_context(entry, mode, stats)
+        )
+        saved = _saved_score_context_payload(entry)
+        # These values are derived from the protected gear and may legitimately
+        # change after a stats formula/data update. They must not prevent refresh.
+        for payload in (current, saved):
+            payload.pop("stats", None)
+            payload.pop("stats_version", None)
+            if mode == "dmg100p":
+                # Dmg/100p does not depend on an FFLogs selection.
+                payload.pop("report_code", None)
+                payload.pop("fight_id", None)
+                payload.pop("actor_id", None)
+        return current == saved
+
+    def _build_score_meta_for_entry(self, entry: dict, mode: str) -> Optional[Dict[str, object]]:
+        model_name = SCORE_MODEL_NAMES.get(mode)
+        model_version = optimizer.SCORE_MODEL_VERSIONS.get(mode)
+        if not model_name or model_version is None:
+            return None
+        data_hash = self._score_data_hash_for_entry(entry)
+        if data_hash is None:
+            return None
+        meta: Dict[str, object] = {
+            "meta_version": SCORE_META_VERSION,
+            "model": model_name,
+            "model_version": int(model_version),
+            "app_version": APP_VERSION,
+            "context_hash": _score_payload_hash(_saved_score_context_payload(entry)),
+            "data_hash": data_hash,
+            "result_hash": _score_payload_hash(
+                {
+                    "score": entry.get("score"),
+                    "expected_score": entry.get("expected_score"),
+                    "gcd": entry.get("gcd"),
+                }
+            ),
+        }
+        if mode not in {"simdps", "simdps_self"}:
+            previous_meta = entry.get("score_meta")
+            comparable_previous = dict(previous_meta) if isinstance(previous_meta, dict) else {}
+            comparable_previous.pop("calculated_at", None)
+            meta["calculated_at"] = (
+                previous_meta.get("calculated_at") or utc_now_iso()
+                if isinstance(previous_meta, dict) and comparable_previous == meta
+                else utc_now_iso()
+            )
+            return meta
+
+        summary = self.damage_summary_self if mode == "simdps_self" else self.damage_summary
+        if not isinstance(summary, dict):
+            return None
+        damage_total = float(summary.get("total_amount") or summary.get("total_damage") or 0.0)
+        if not math.isfinite(damage_total) or damage_total <= 0:
+            return None
+        fight_ms = 0
+        if self.selected_fight:
+            start_time = self.selected_fight.get("startTime", self.selected_fight.get("start_time", 0))
+            end_time = self.selected_fight.get("endTime", self.selected_fight.get("end_time", 0))
+            fight_ms = int(end_time - start_time)
+        effective_duration_ms = self._simdps_effective_duration_ms(fight_ms)
+        report_code = extract_report_code(str(entry.get("report_code") or ""))
+        fight_id = entry.get("fight_id")
+        actor_id = entry.get("actor_id")
+        if effective_duration_ms <= 0 or not report_code or fight_id is None or actor_id is None:
+            return None
+
+        baseline_gear = self._simdps_baseline_gearset or self.current_gearset
+        baseline_party_value = self._simdps_baseline_party
+        baseline_party = int(self.party_bonus.value() if baseline_party_value is None else baseline_party_value)
+        baseline_race = self._simdps_baseline_race or baseline_gear.race or self._current_race()
+        baseline_entry = next(
+            (
+                saved
+                for saved in self.saved_sets
+                if isinstance(saved, dict) and saved.get("id") == self._simdps_baseline_entry_id
+            ),
+            None,
+        )
+        baseline_data_entry = baseline_entry or {
+            "gearset": baseline_gear.to_dict(),
+            "food_id": baseline_gear.food_id,
+        }
+        baseline_data_hash = self._score_data_hash_for_entry(baseline_data_entry)
+        if baseline_data_hash is None:
+            return None
+        meta.update(
+            {
+                "metric": "ndps" if mode == "simdps_self" else "adps",
+                "report_code": report_code,
+                "fight_id": fight_id,
+                "actor_id": actor_id,
+                "effective_duration_ms": int(effective_duration_ms),
+                "damage_total": damage_total,
+                "log_data_hash": self._score_log_data_hash(summary),
+                "baseline_entry_id": self._simdps_baseline_entry_id,
+                "baseline_gearset": baseline_gear.to_dict(),
+                "baseline_hash": self._score_baseline_hash(baseline_gear, baseline_party, baseline_race),
+                "baseline_data_hash": baseline_data_hash,
+            }
+        )
+        previous_meta = entry.get("score_meta")
+        comparable_previous = dict(previous_meta) if isinstance(previous_meta, dict) else {}
+        comparable_previous.pop("calculated_at", None)
+        meta["calculated_at"] = (
+            previous_meta.get("calculated_at") or utc_now_iso()
+            if isinstance(previous_meta, dict) and comparable_previous == meta
+            else utc_now_iso()
+        )
+        return meta
+
+    def _saved_score_validation(self, entry: dict) -> Tuple[bool, str]:
+        if entry.get("score") is None:
+            return False, ""
+        try:
+            numeric_values = [float(entry["score"])]
+            for key in ("expected_score", "gcd"):
+                if entry.get(key) is not None:
+                    numeric_values.append(float(entry[key]))
+        except (TypeError, ValueError):
+            return False, "保存スコアの数値が不正です。再計算してください。"
+        if not all(math.isfinite(value) for value in numeric_values):
+            return False, "保存スコアの数値が不正です。再計算してください。"
+        mode = str(entry.get("mode") or "simdps")
+        meta = entry.get("score_meta")
+        if not isinstance(meta, dict):
+            return False, "旧形式の保存スコアです。セットを選択して再計算してください。"
+        if meta.get("meta_version") != SCORE_META_VERSION:
+            return False, "保存スコアの検証形式が更新されています。再計算してください。"
+        if (
+            meta.get("model") != SCORE_MODEL_NAMES.get(mode)
+            or meta.get("model_version") != optimizer.SCORE_MODEL_VERSIONS.get(mode)
+        ):
+            return False, "計算モデルが更新されています。セットを選択して再計算してください。"
+        context_payload = _saved_score_context_payload(entry)
+        if meta.get("context_hash") != _score_payload_hash(context_payload):
+            return False, "保存後に装備または計算条件が変更されています。再計算してください。"
+        expected_result_hash = _score_payload_hash(
+            {
+                "score": entry.get("score"),
+                "expected_score": entry.get("expected_score"),
+                "gcd": entry.get("gcd"),
+            }
+        )
+        if meta.get("result_hash") != expected_result_hash:
+            return False, "保存スコアの値が検証情報と一致しません。再計算してください。"
+        stored_data_hash = meta.get("data_hash")
+        if not stored_data_hash:
+            return False, "装備データの検証情報がありません。再計算してください。"
+        current_data_hash = self._score_data_hash_for_entry(entry)
+        if current_data_hash is not None and current_data_hash != stored_data_hash:
+            return False, "装備・食事データが更新されています。再計算してください。"
+        if mode not in {"simdps", "simdps_self"}:
+            return True, ""
+        expected_metric = "ndps" if mode == "simdps_self" else "adps"
+        if meta.get("metric") != expected_metric:
+            return False, "ログ評価指標が現在の計算方式と一致しません。再計算してください。"
+        for key in ("report_code", "fight_id", "actor_id"):
+            if meta.get(key) != context_payload.get(key):
+                return False, "保存スコアとログ条件が一致しません。再計算してください。"
+        try:
+            duration_ms = int(meta.get("effective_duration_ms") or 0)
+            damage_total = float(meta.get("damage_total") or 0.0)
+        except (TypeError, ValueError):
+            return False, "保存スコアの検証情報が不正です。再計算してください。"
+        if duration_ms <= 0 or not math.isfinite(damage_total) or damage_total <= 0:
+            return False, "保存スコアのログ基準値が不足しています。再計算してください。"
+        if not meta.get("log_data_hash"):
+            return False, "ログ集計の検証情報がありません。再計算してください。"
+        active_report_code = (
+            extract_report_code(self.input_report_code.text())
+            if hasattr(self, "input_report_code")
+            else None
+        )
+        active_fight_id = self.selected_fight.get("id") if getattr(self, "selected_fight", None) else None
+        active_actor_id = self.selected_actor.get("id") if getattr(self, "selected_actor", None) else None
+        if (
+            active_report_code == context_payload.get("report_code")
+            and active_fight_id == context_payload.get("fight_id")
+            and active_actor_id == context_payload.get("actor_id")
+        ):
+            active_summary = self.damage_summary_self if mode == "simdps_self" else self.damage_summary
+            if isinstance(active_summary, dict):
+                if meta.get("log_data_hash") != self._score_log_data_hash(active_summary):
+                    return False, "ログ集計データが保存後に変更されています。再計算してください。"
+                if isinstance(getattr(self, "damage_table", None), dict):
+                    start_time = self.selected_fight.get("startTime", self.selected_fight.get("start_time", 0))
+                    end_time = self.selected_fight.get("endTime", self.selected_fight.get("end_time", 0))
+                    current_duration_ms = self._simdps_effective_duration_ms(int(end_time - start_time))
+                    if current_duration_ms > 0 and current_duration_ms != duration_ms:
+                        return False, "ログの有効戦闘時間が保存後に変更されています。再計算してください。"
+        if not meta.get("baseline_data_hash"):
+            return False, "ログ基準装備のデータ検証情報がありません。再計算してください。"
+
+        baseline_entry_id = meta.get("baseline_entry_id")
+        if baseline_entry_id is not None:
+            baseline_entry = next(
+                (
+                    saved
+                    for saved in self.saved_sets
+                    if isinstance(saved, dict) and saved.get("id") == baseline_entry_id
+                ),
+                None,
+            )
+            if not baseline_entry or not isinstance(baseline_entry.get("gearset"), dict):
+                return False, "ログ基準装備が見つかりません。基準装備を設定して再計算してください。"
+            baseline_gear = Gearset.from_dict(baseline_entry["gearset"])
+            try:
+                baseline_party = int(baseline_entry.get("party_bonus", 0) or 0)
+            except (TypeError, ValueError):
+                return False, "ログ基準装備の検証情報が不正です。再計算してください。"
+            baseline_hash = self._score_baseline_hash(baseline_gear, baseline_party, baseline_gear.race)
+            if meta.get("baseline_hash") != baseline_hash:
+                return False, "ログ基準装備が保存後に変更されています。再計算してください。"
+            baseline_data_hash = self._score_data_hash_for_entry(baseline_entry)
+            if baseline_data_hash is not None and meta.get("baseline_data_hash") != baseline_data_hash:
+                return False, "ログ基準装備のデータが更新されています。再計算してください。"
+        elif not meta.get("baseline_hash"):
+            return False, "ログ基準装備の検証情報がありません。再計算してください。"
+        else:
+            baseline_gearset = meta.get("baseline_gearset")
+            if not isinstance(baseline_gearset, dict):
+                return False, "ログ基準装備の保存情報がありません。再計算してください。"
+            baseline_probe = {
+                "gearset": baseline_gearset,
+                "food_id": Gearset.from_dict(baseline_gearset).food_id,
+            }
+            baseline_data_hash = self._score_data_hash_for_entry(baseline_probe)
+            if baseline_data_hash is not None and meta.get("baseline_data_hash") != baseline_data_hash:
+                return False, "ログ基準装備のデータが更新されています。再計算してください。"
+        return True, ""
 
     def _saved_expected_score_value(self, entry: Optional[dict]) -> Optional[float]:
         if not isinstance(entry, dict):
@@ -2622,7 +3405,7 @@ class MainWindow(QMainWindow):
         return None
 
     def _score_tie_tolerance(self, mode: str) -> float:
-        return 0.005 if mode == "dmg100p" else 0.05
+        return optimizer.score_tie_tolerance(mode)
 
     def _clear_optimal_variant_tabs(self) -> None:
         self._optimal_variant_entries = []
@@ -2693,6 +3476,8 @@ class MainWindow(QMainWindow):
             other_sel = (other.items or {}).get(slot) or ItemSelection()
             base_id = int(base_sel.item_id or 0) if base_sel.item_id else 0
             other_id = int(other_sel.item_id or 0) if other_sel.item_id else 0
+            if self._selection_relic_stats(base_sel) != self._selection_relic_stats(other_sel):
+                return True
             if base_id == other_id:
                 continue
             table = self.slot_tables.get(slot)
@@ -2790,6 +3575,12 @@ class MainWindow(QMainWindow):
                     "gcd": float(gcd),
                 }
             )
+        evaluated_entries.sort(
+            key=lambda entry: (
+                -float(entry["score"]),
+                float(entry["gcd"]),
+            )
+        )
         base_entry = evaluated_entries[0]
         tie_tolerance = self._score_tie_tolerance(mode)
         entries: List[Dict[str, object]] = [base_entry]
@@ -2879,6 +3670,52 @@ class MainWindow(QMainWindow):
         normalized_expected = float(score) if expected_score is None else float(expected_score)
         self._set_last_eval(mode, float(score), float(gcd), normalized_expected)
         self._update_live_saved_set_preview(mode, float(score), float(gcd), normalized_expected)
+        self._finish_pending_saved_score_recalculation()
+
+    def _set_pending_saved_score_recalculation_waiting(self, reason: str) -> None:
+        if getattr(self, "_pending_saved_score_recalculation_id", None) is None or not hasattr(self, "progress_label"):
+            return
+        name = getattr(self, "_pending_saved_score_recalculation_name", None) or "保存セット"
+        self.progress_label.setText(f"「{name}」は再計算待機中です。{reason}")
+
+    def _begin_saved_score_recalculation(self, entry: Optional[dict]) -> bool:
+        valid, _message = self._saved_score_validation(entry) if isinstance(entry, dict) else (True, "")
+        needs_recalculation = bool(
+            isinstance(entry, dict) and entry.get("score") is not None and not valid
+        )
+        self._pending_saved_score_recalculation_id = (
+            entry.get("id") if needs_recalculation else None
+        )
+        self._pending_saved_score_recalculation_name = (
+            str(entry.get("name") or "保存セット") if needs_recalculation else None
+        )
+        if needs_recalculation and hasattr(self, "progress_label"):
+            self.progress_label.setText(
+                f"「{self._pending_saved_score_recalculation_name}」の保存スコアを再計算中..."
+            )
+        return needs_recalculation
+
+    def _finish_pending_saved_score_recalculation(self) -> None:
+        entry_id = getattr(self, "_pending_saved_score_recalculation_id", None)
+        if entry_id is None:
+            return
+        name = getattr(self, "_pending_saved_score_recalculation_name", None) or "保存セット"
+        entry = next(
+            (
+                saved
+                for saved in self.saved_sets
+                if isinstance(saved, dict) and saved.get("id") == entry_id
+            ),
+            None,
+        )
+        valid, message = self._saved_score_validation(entry) if entry is not None else (False, "保存セットが見つかりません。")
+        if hasattr(self, "progress_label"):
+            if valid:
+                self.progress_label.setText(f"「{name}」の保存スコアを再計算しました。")
+            else:
+                self.progress_label.setText(f"「{name}」の再計算結果を保存できません。{message}")
+        self._pending_saved_score_recalculation_id = None
+        self._pending_saved_score_recalculation_name = None
 
     def _parse_json_objects_from_text(self, text: str) -> List[dict]:
         raw = (text or "").strip()
@@ -2961,11 +3798,11 @@ class MainWindow(QMainWindow):
         return lookup
 
     def _checked_saved_set_entries(self) -> List[dict]:
-        entries: List[dict] = []
-        for entry in self.saved_sets:
-            if isinstance(entry, dict) and bool(entry.get("export_checked", False)):
-                entries.append(entry)
-        return entries
+        return [
+            entry
+            for entry in self.saved_sets
+            if isinstance(entry, dict) and bool(entry.get("export_checked", False))
+        ]
 
     def _xivgear_export_food_id(self, food_id: Optional[int]) -> Optional[int]:
         food = self._find_food_by_id(food_id)
@@ -2991,6 +3828,7 @@ class MainWindow(QMainWindow):
         if not gear.job:
             return None, 0
         context = self._saved_set_ui_context(entry, gear)
+        gear = self._gearset_with_export_overrides(gear, context)
         items_blob: Dict[str, dict] = {}
         missing_materia = 0
         for slot in GEAR_SLOTS:
@@ -3011,7 +3849,15 @@ class MainWindow(QMainWindow):
                     missing_materia += 1
                     continue
                 materia_blob.append({"id": int(materia_item_id), "locked": False})
-            items_blob[xiv_slot] = {"id": int(sel.item_id), "materia": materia_blob}
+            item_payload = {"id": int(sel.item_id), "materia": materia_blob}
+            relic_stats = self._selection_relic_stats(sel)
+            if relic_stats:
+                item_payload["relicStats"] = {
+                    XIVGEAR_RELIC_STAT_NAME_BY_ID[int(stat_id)]: int(value)
+                    for stat_id, value in relic_stats.items()
+                    if int(stat_id) in XIVGEAR_RELIC_STAT_NAME_BY_ID and int(value or 0) > 0
+                }
+            items_blob[xiv_slot] = item_payload
         if not items_blob:
             return None, missing_materia
         sync_enabled = bool(context.get("level_sync_enabled", False))
@@ -3118,6 +3964,8 @@ class MainWindow(QMainWindow):
         gear = Gearset.from_dict(gear_data)
         if not gear.job:
             return None, 0
+        context = self._saved_set_ui_context(entry, gear)
+        gear = self._gearset_with_export_overrides(gear, context)
         materia_lookup = self._xivgear_materia_export_lookup()
         gearpieces: List[dict] = []
         missing_materia = 0
@@ -3232,6 +4080,7 @@ class MainWindow(QMainWindow):
                         continue
                     item_id = _to_int(item_blob.get("id"))
                     materia_list: List[MateriaSlotSelection] = []
+                    relic_stats: Dict[int, int] = {}
                     for m in (item_blob.get("materia") or []):
                         if not isinstance(m, dict):
                             continue
@@ -3245,7 +4094,19 @@ class MainWindow(QMainWindow):
                         materia_list.append(
                             MateriaSlotSelection(base_param=mapped[0], grade=mapped[1])
                         )
-                    gear_items[slot] = ItemSelection(item_id=item_id, materia=materia_list)
+                    raw_relic_stats = item_blob.get("relicStats")
+                    if isinstance(raw_relic_stats, dict):
+                        for raw_name, raw_value in raw_relic_stats.items():
+                            try:
+                                stat_name = str(raw_name or "").strip().lower()
+                                stat_value = int(raw_value or 0)
+                            except Exception:
+                                continue
+                            stat_id = XIVGEAR_RELIC_STAT_ID_BY_NAME.get(stat_name)
+                            if not stat_id or stat_value <= 0:
+                                continue
+                            relic_stats[int(stat_id)] = stat_value
+                    gear_items[slot] = ItemSelection(item_id=item_id, materia=materia_list, relic_stats=relic_stats)
 
                 if not gear_items:
                     skipped += 1
@@ -3297,7 +4158,7 @@ class MainWindow(QMainWindow):
                 entry = {
                     "id": now_ms + entry_idx,
                     "name": name,
-                    "saved_at": datetime.now().isoformat(timespec="seconds"),
+                    "saved_at": utc_now_iso(),
                     "mode": self.calc_mode.currentData() or "simdps_self",
                     "score": None,
                     "expected_score": None,
@@ -3356,13 +4217,6 @@ class MainWindow(QMainWindow):
         self.progress_label.setText(f"XIVGear取込: {len(entries)}件")
         QMessageBox.information(self, "取込完了", "\n".join(msg_lines))
 
-    def on_export_xivgear_clipboard(self) -> None:
-        entries = self._checked_saved_set_entries()
-        if not entries:
-            QMessageBox.warning(self, "対象なし", "保存セットの出力チェックを付けたものがありません。")
-            return
-        self._copy_xivgear_entries_to_clipboard(entries)
-
     def _entry_with_current_gearset_for_export(self, entry: dict) -> dict:
         if not isinstance(entry, dict):
             return entry
@@ -3375,6 +4229,9 @@ class MainWindow(QMainWindow):
         merged["party_bonus"] = self.party_bonus.value()
         merged["ui_context"] = self._capture_saved_set_ui_context(self.current_gearset.job)
         return merged
+
+    def _gearset_with_export_overrides(self, gear: Gearset, context: Optional[dict]) -> Gearset:
+        return gearset_with_export_overrides(gear, context, self.items_by_id)
 
     def _copy_xivgear_entries_to_clipboard(self, entries: List[dict]) -> bool:
         if not entries:
@@ -3426,10 +4283,12 @@ class MainWindow(QMainWindow):
     def on_save_set_to_history(self) -> None:
         # 保持しているマテリアを消さないため、保存時は明示的に必要項目のみ更新
         self.current_gearset.target_gcd = self.input_target_gcd.value()
-        self.current_gearset.food_id = self.food_combo.currentData()
+        self._sync_food_selection_to_gearset()
         self.current_gearset.race = self._current_race()
         self.current_gearset.level = self._effective_calc_level()
-        if not self.last_eval:
+        save_mode = self.calc_mode.currentData() or "simdps_self"
+        current_eval = self._evaluate_current_gearset_scores(save_mode)
+        if current_eval is None:
             res = QMessageBox.question(
                 self,
                 "結果なし",
@@ -3443,16 +4302,15 @@ class MainWindow(QMainWindow):
         if not ok:
             return
         name = (name or "").strip() or default_name
-        food_id = self.food_combo.currentData()
-        self.current_gearset.food_id = food_id
+        food_id = self.current_gearset.food_id
         entry = {
             "id": int(time.time() * 1000),
             "name": name,
-            "saved_at": datetime.now().isoformat(timespec="seconds"),
-            "mode": self.last_eval.get("mode") if self.last_eval else (self.calc_mode.currentData() or "simdps_self"),
-            "score": self.last_eval.get("score") if self.last_eval else None,
-            "expected_score": self.last_eval.get("expected_score") if self.last_eval else None,
-            "gcd": self.last_eval.get("gcd") if self.last_eval else None,
+            "saved_at": utc_now_iso(),
+            "mode": save_mode,
+            "score": current_eval[0] if current_eval else None,
+            "expected_score": current_eval[1] if current_eval else None,
+            "gcd": current_eval[2] if current_eval else None,
             "food_id": food_id,
             "gearset": self.current_gearset.to_dict(),
             "report_code": extract_report_code(self.input_report_code.text()),
@@ -3467,6 +4325,10 @@ class MainWindow(QMainWindow):
         if stats:
             entry["stats"] = stats
             entry["stats_version"] = STATS_VERSION
+        if entry.get("score") is not None:
+            score_meta = self._build_score_meta_for_entry(entry, str(entry["mode"]))
+            if score_meta is not None:
+                entry["score_meta"] = score_meta
         self.saved_sets.append(entry)
         self._schedule_saved_sets_flush(immediate=True)
         self._refresh_saved_sets_table()
@@ -3485,6 +4347,12 @@ class MainWindow(QMainWindow):
             return
         if entry.get("id") == self._current_loaded_saved_set_id:
             self._current_loaded_saved_set_id = None
+        if entry.get("id") == self._simdps_baseline_entry_id:
+            self._simdps_baseline_entry_id = None
+            self._simdps_baseline_exact = False
+            self._simdps_baseline_name = None
+            self._log_gcd_constraint = None
+            self._refresh_log_gcd_ui()
         self.saved_sets = [e for e in self.saved_sets if e.get("id") != entry.get("id")]
         self._schedule_saved_sets_flush(immediate=True)
         self._refresh_saved_sets_table()
@@ -3502,6 +4370,7 @@ class MainWindow(QMainWindow):
         if table.currentRow() != row:
             blocker = QSignalBlocker(table)
             table.setCurrentCell(row, SAVED_COL_NAME)
+            del blocker
         entry_item = table.item(row, SAVED_COL_NAME)
         entry = entry_item.data(Qt.UserRole) if entry_item else None
         if not isinstance(entry, dict):
@@ -3513,6 +4382,7 @@ class MainWindow(QMainWindow):
         if checked_entries:
             action_xivgear_export_checked = menu.addAction("XIVGear ｴｸｽﾎﾟｰﾄ(ﾁｪｯｸ済み)")
         action_bisbuddy_export = menu.addAction("BisBuddy ｴｸｽﾎﾟｰﾄ")
+        action_log_baseline = menu.addAction("ログ基準装備に設定")
         menu.addSeparator()
         action_delete = menu.addAction("削除")
         chosen = menu.exec(table.viewport().mapToGlobal(pos))
@@ -3522,8 +4392,67 @@ class MainWindow(QMainWindow):
             self._copy_xivgear_entries_to_clipboard(checked_entries)
         elif chosen is action_bisbuddy_export:
             self.on_export_bisbuddy_clipboard(entry)
+        elif chosen is action_log_baseline:
+            self._set_saved_set_as_log_baseline(entry)
         elif chosen is action_delete:
             self.on_delete_saved_set()
+
+    def _set_saved_set_as_log_baseline(self, entry: dict) -> None:
+        code = extract_report_code(self.input_report_code.text())
+        fight_id = self.selected_fight.get("id") if self.selected_fight else None
+        actor_id = self.selected_actor.get("id") if self.selected_actor else None
+        entry_code = extract_report_code(str(entry.get("report_code") or ""))
+        try:
+            exact_context = (
+                bool(code)
+                and entry_code == code
+                and int(entry.get("fight_id")) == int(fight_id)
+                and int(entry.get("actor_id")) == int(actor_id)
+            )
+        except (TypeError, ValueError):
+            exact_context = False
+        gear = Gearset.from_dict(entry.get("gearset") or {})
+        context = entry.get("ui_context")
+        if exact_context and isinstance(context, dict):
+            saved_sync = context.get("level_sync_enabled")
+            if saved_sync is not None and bool(saved_sync) != self._level_sync_enabled():
+                exact_context = False
+            if exact_context and bool(saved_sync):
+                try:
+                    if context.get("level_sync_il") is not None:
+                        exact_context = int(context.get("level_sync_il")) == self._level_sync_il_value()
+                    if exact_context and context.get("level_sync_level") is not None:
+                        exact_context = int(context.get("level_sync_level")) == self._effective_calc_level()
+                except (TypeError, ValueError):
+                    exact_context = False
+        if not exact_context or gear.job != self.current_gearset.job:
+            QMessageBox.warning(
+                self,
+                "ログ条件不一致",
+                "現在選択中のReport・Fight・Actor・ジョブと完全一致する保存セットだけをログ基準にできます。",
+            )
+            return
+        for saved in self.saved_sets:
+            if not isinstance(saved, dict):
+                continue
+            saved_code = extract_report_code(str(saved.get("report_code") or ""))
+            if (
+                saved_code == code
+                and saved.get("fight_id") == entry.get("fight_id")
+                and saved.get("actor_id") == entry.get("actor_id")
+            ):
+                saved.pop("baseline_role", None)
+        entry["baseline_role"] = "log_source"
+        self._schedule_saved_sets_flush(immediate=True)
+        self._simdps_baseline_gearset = Gearset.from_dict(gear.to_dict())
+        self._simdps_baseline_exact = True
+        self._simdps_baseline_name = str(entry.get("name") or "")
+        self._simdps_baseline_entry_id = entry.get("id")
+        self._simdps_baseline_party = int(entry.get("party_bonus", self.party_bonus.value()))
+        self._simdps_baseline_race = gear.race or self._current_race()
+        self._update_simdps_baseline_data()
+        self._refresh_log_gcd_profile()
+        self.progress_label.setText(f"「{self._simdps_baseline_name}」をログ基準装備に設定しました。")
 
     def on_saved_set_selected(self) -> None:
         if self._saved_sets_reordering or self._updating_saved_table:
@@ -3539,6 +4468,9 @@ class MainWindow(QMainWindow):
         if not gear_data:
             return
         gear = Gearset.from_dict(gear_data)
+        needs_score_recalculation = self._begin_saved_score_recalculation(entry)
+        # A saved-set selection must run once even when its inputs match the last preview.
+        self._last_preview_signature = None
         self._pending_saved_set_entry = entry
         restored_ui_context = self._saved_set_ui_context(entry, gear)
         self._pending_saved_set_ui_context = restored_ui_context
@@ -3547,7 +4479,11 @@ class MainWindow(QMainWindow):
         self._apply_gearset_to_ui(gear)
         self.last_eval = None
         if hasattr(self, "calc_result_label_left"):
-            self.calc_result_label_left.setText("計算結果: 更新中...")
+            self.calc_result_label_left.setText(
+                "計算結果: 保存スコアを再計算中..."
+                if needs_score_recalculation
+                else "計算結果: 更新中..."
+            )
         self._schedule_auto_score_update()
 
     def on_saved_set_item_changed(self, item: QTableWidgetItem) -> None:
@@ -3747,7 +4683,11 @@ class MainWindow(QMainWindow):
                 def task(progress=None, stop_event=None):
                     items = self.xiv_client.fetch_items_for_jobs([gear.job], force=False, progress=progress, stop_event=stop_event)
                     return items
-                self.start_worker(task, lambda items: self._after_items(gear.job, items))
+                self.start_worker(
+                    task,
+                    lambda items: self._after_items(gear.job, items),
+                    lock_job_context=True,
+                )
             return
 
         self._applying_gearset = True
@@ -3782,6 +4722,8 @@ class MainWindow(QMainWindow):
                         pending_ui_context = refreshed_ui_context
                         self._pending_saved_set_ui_context = refreshed_ui_context
                         self._persist_saved_set_ui_context(pending_entry, refreshed_ui_context)
+                    elif pending_ui_context is None:
+                        self._current_export_item_ids = {}
                     self._apply_saved_set_ui_context(pending_ui_context, gear.job)
                     self._ensure_il_filter_for_gearset(gear, pending_ui_context, immediate=True)
                     need_populate = gear.job != self._last_populated_job
@@ -3819,7 +4761,12 @@ class MainWindow(QMainWindow):
                     self._select_table_row(table, sel.item_id)
             self._refresh_all_slot_exclusion_visuals()
             self._ensure_food_combo_item(gear.food_id)
-            idx = self.food_combo.findData(self._resolve_food_id(gear.food_id))
+            target_food_data = (
+                FOOD_SIMULATION_DATA
+                if bool(getattr(gear, "food_simulation", False))
+                else self._resolve_food_id(gear.food_id)
+            )
+            idx = self.food_combo.findData(target_food_data)
             target_index = idx if idx != -1 else 0
             if self.food_combo.currentIndex() != target_index:
                 self.food_combo.setCurrentIndex(target_index)
@@ -3843,9 +4790,28 @@ class MainWindow(QMainWindow):
         if not self._is_populating:
             for slot in self.slot_tables.keys():
                 self._refresh_slot_selected_display(slot)
+        self._update_optimize_button_text()
         self._schedule_auto_score_update()
 
     # ---- FFLogs handlers ----
+    def _fflogs_context_matches(
+        self,
+        report_code: str,
+        fight_id: Optional[int] = None,
+        actor_id: Optional[int] = None,
+    ) -> bool:
+        if extract_report_code(self.input_report_code.text()) != report_code:
+            return False
+        if fight_id is not None:
+            current_fight_id = (self.selected_fight or {}).get("id")
+            if current_fight_id != fight_id:
+                return False
+        if actor_id is not None:
+            current_actor_id = (self.selected_actor or {}).get("id")
+            if current_actor_id != actor_id:
+                return False
+        return True
+
     def on_load_fights(self) -> None:
         client_id = self.input_client_id.text().strip() if hasattr(self, "input_client_id") else ""
         client_secret = self.input_client_secret.text().strip() if hasattr(self, "input_client_secret") else ""
@@ -3853,13 +4819,17 @@ class MainWindow(QMainWindow):
             self.ff_client.set_credentials(client_id, client_secret)
         code = extract_report_code(self.input_report_code.text())
         if not code:
-            QMessageBox.warning(self, "入力不足", "レポートコードを入力してください。")
+            QMessageBox.warning(self, "入力不正", "FFLogsレポートコードまたはURLを正しく入力してください。")
             return
-        cached = self._load_report_cache(code)
+        force_refresh = self._fflogs_force_refresh_enabled()
+        if force_refresh:
+            self.ff_client.clear_cache()
+        cached = None if force_refresh else self._load_report_cache(code, sections=["fights"])
         if cached and cached.get("fights"):
             self._after_fights(
                 {"fights": cached.get("fights", []), "enemy_npcs": cached.get("enemy_npcs", [])},
                 from_cache=True,
+                request_code=code,
             )
             return
         if not self.ff_client.ready():
@@ -3872,9 +4842,22 @@ class MainWindow(QMainWindow):
                 progress(100, f"ファイト {len(fights)} 件取得")
             return {"fights": fights, "enemy_npcs": self.ff_client.last_enemy_npcs}
 
-        self.start_worker(task, self._after_fights)
+        self.start_worker(
+            task,
+            lambda result: self._after_fights(result, request_code=code),
+            lock_fflogs_context=True,
+        )
 
-    def _after_fights(self, fights: object, from_cache: bool = False) -> None:
+    def _after_fights(
+        self,
+        fights: object,
+        from_cache: bool = False,
+        request_code: Optional[str] = None,
+    ) -> None:
+        code = request_code or extract_report_code(self.input_report_code.text())
+        if request_code and not self._fflogs_context_matches(request_code):
+            logger.info("Discarded stale FFLogs fights result for report %s", request_code)
+            return
         raw_fights: List[dict] = []
         enemy_npcs: List[dict] = []
         if isinstance(fights, dict):
@@ -3885,8 +4868,7 @@ class MainWindow(QMainWindow):
         self.enemy_npcs = enemy_npcs
         self._raw_fights = raw_fights
         self._refresh_fight_list()
-        code = extract_report_code(self.input_report_code.text())
-        if code:
+        if code and not from_cache:
             self._save_report_cache(code, fights=raw_fights, enemy_npcs=self.enemy_npcs)
         if not self.fights:
             self.progress_label.setText("撃破ファイトが見つかりませんでした")
@@ -4036,6 +5018,10 @@ class MainWindow(QMainWindow):
         if not items:
             return
         fight = items[0].data(Qt.UserRole)
+        if not isinstance(fight, dict):
+            return
+        fight = dict(fight)
+        fight_id = fight.get("id")
         self.selected_fight = fight
         self._reset_phase_combo()
         self._phase_transitions = fight.get("phaseTransitions") or []
@@ -4048,12 +5034,21 @@ class MainWindow(QMainWindow):
         self.on_save_auth(silent=True)
         self.selected_actor = None
         self.actor_list.clear()
-        cached = self._load_report_cache(code) if code else None
+        cached = (
+            self._load_report_cache(code, sections=["players_by_fight"])
+            if code and not self._fflogs_force_refresh_enabled()
+            else None
+        )
         if cached:
             players_by_fight = cached.get("players_by_fight", {})
             cached_players = players_by_fight.get(str(fight.get("id")))
             if cached_players:
-                self._after_players(cached_players, from_cache=True)
+                self._after_players(
+                    cached_players,
+                    from_cache=True,
+                    request_code=code,
+                    request_fight_id=fight_id,
+                )
                 if code and fight:
                     self._load_phases_for_fight(code, fight)
                 return
@@ -4074,13 +5069,22 @@ class MainWindow(QMainWindow):
                 progress(100, f"アクター {len(players)} 件取得")
             return {"players": players, "phases_payload": phases_payload}
 
-        self.start_worker(task, self._after_players)
+        self.start_worker(
+            task,
+            lambda result: self._after_players(
+                result,
+                request_code=code,
+                request_fight_id=fight_id,
+            ),
+            lock_fflogs_context=True,
+        )
 
     def _load_phases_for_fight(self, report_code: str, fight: dict) -> None:
         if self.active_worker:
             self._pending_phase_request = (report_code, dict(fight))
             return
         encounter_id = fight.get("encounterID") or fight.get("encounterId")
+        fight_id = fight.get("id")
 
         def task(progress=None, stop_event=None):
             norm_encounter = None
@@ -4093,9 +5097,17 @@ class MainWindow(QMainWindow):
             return phases_payload or {}
 
         def after(payload):
-            self._apply_phase_payload(payload)
+            if self._fflogs_context_matches(report_code, fight_id):
+                self._apply_phase_payload(payload)
+            else:
+                logger.info("Discarded stale FFLogs phase result for report %s", report_code)
 
-        self.start_worker(task, after, silent_if_busy=True)
+        self.start_worker(
+            task,
+            after,
+            silent_if_busy=True,
+            lock_fflogs_context=True,
+        )
 
     def _resolve_actor_job(self, actor: dict) -> Optional[str]:
         if not isinstance(actor, dict):
@@ -4195,7 +5207,24 @@ class MainWindow(QMainWindow):
         if self.phase_list.count() <= 1:
             self._populate_phase_from_transitions()
 
-    def _after_players(self, players: List[dict], from_cache: bool = False) -> None:
+    def _after_players(
+        self,
+        players: List[dict],
+        from_cache: bool = False,
+        request_code: Optional[str] = None,
+        request_fight_id: Optional[int] = None,
+    ) -> None:
+        code = request_code or extract_report_code(self.input_report_code.text())
+        fight_id = request_fight_id
+        if fight_id is None and self.selected_fight:
+            fight_id = self.selected_fight.get("id")
+        if request_code and not self._fflogs_context_matches(request_code, request_fight_id):
+            logger.info(
+                "Discarded stale FFLogs players result for report %s fight %s",
+                request_code,
+                request_fight_id,
+            )
+            return
         phase_payload = None
         if isinstance(players, dict):
             phase_payload = players.get("phases_payload")
@@ -4206,9 +5235,9 @@ class MainWindow(QMainWindow):
             if not job or job not in JOB_ORDER:
                 continue
             # Copy so cached objects are not mutated unexpectedly.
-            actor = dict(actor)
-            actor["job"] = job
-            filtered_players.append(actor)
+            actor_copy = dict(actor)
+            actor_copy["job"] = job
+            filtered_players.append(actor_copy)
         self.players = sorted(
             filtered_players,
             key=lambda p: (
@@ -4236,11 +5265,16 @@ class MainWindow(QMainWindow):
         self.filter_actors()
         if self.actor_list.count() > 0 and not self.actor_list.currentItem():
             self.actor_list.setCurrentRow(0)
-        code = extract_report_code(self.input_report_code.text())
-        if code and self.selected_fight:
-            cached = self._load_report_cache(code) or {"code": code, "fights": self.fights, "players_by_fight": {}}
+        if code and fight_id is not None and not from_cache:
+            cached = self._load_report_cache(code, allow_stale=True) or {
+                "code": code,
+                "fights": self.fights,
+                "players_by_fight": {},
+            }
             players_by_fight = cached.get("players_by_fight", {})
-            players_by_fight[str(self.selected_fight.get("id"))] = self.players
+            if not isinstance(players_by_fight, dict):
+                players_by_fight = {}
+            players_by_fight[str(fight_id)] = self.players
             self._save_report_cache(code, players_by_fight=players_by_fight)
         if self._pending_actor_id:
             self._select_actor_by_id(self._pending_actor_id)
@@ -4283,8 +5317,11 @@ class MainWindow(QMainWindow):
             except Exception:
                 return None
 
+        wanted_code = extract_report_code(str(report_code or ""))
         wanted_fight = _norm_int(fight_id)
         wanted_actor = _norm_int(actor_id)
+        if not wanted_code or wanted_fight is None or wanted_actor is None:
+            return None
         candidates: List[dict] = []
         for entry in self.saved_sets or []:
             if not isinstance(entry, dict):
@@ -4292,18 +5329,41 @@ class MainWindow(QMainWindow):
             if not entry.get("gearset"):
                 continue
             entry_code = extract_report_code(str(entry.get("report_code") or ""))
-            if entry_code and report_code and entry_code != report_code:
+            if entry_code != wanted_code:
                 continue
             entry_fight = _norm_int(entry.get("fight_id"))
-            if wanted_fight is not None and entry_fight is not None and entry_fight != wanted_fight:
+            if entry_fight != wanted_fight:
                 continue
             entry_actor = _norm_int(entry.get("actor_id"))
-            if wanted_actor is not None and entry_actor is not None and entry_actor != wanted_actor:
+            if entry_actor != wanted_actor:
                 continue
+            gear = Gearset.from_dict(entry.get("gearset") or {})
+            current_job = self.current_gearset.job
+            if current_job and gear.job != current_job:
+                continue
+            context = entry.get("ui_context")
+            if isinstance(context, dict) and hasattr(self, "chk_level_sync"):
+                saved_sync = context.get("level_sync_enabled")
+                if saved_sync is not None and bool(saved_sync) != self._level_sync_enabled():
+                    continue
+                if bool(saved_sync):
+                    saved_il = _norm_int(context.get("level_sync_il"))
+                    saved_level = _norm_int(context.get("level_sync_level"))
+                    if saved_il is not None and saved_il != self._level_sync_il_value():
+                        continue
+                    if saved_level is not None and saved_level != self._effective_calc_level():
+                        continue
             candidates.append(entry)
         if not candidates:
             return None
-        preferred = []
+        explicit = [entry for entry in candidates if entry.get("baseline_role") == "log_source"]
+        if explicit:
+            explicit.sort(key=lambda e: timestamp_sort_value(e.get("saved_at")), reverse=True)
+            return explicit[0]
+        selected = [entry for entry in candidates if entry.get("id") == self._current_loaded_saved_set_id]
+        if selected:
+            return selected[0]
+        preferred: List[dict] = []
         for entry in candidates:
             name = str(entry.get("name") or "")
             lower_name = name.lower()
@@ -4311,7 +5371,7 @@ class MainWindow(QMainWindow):
                 preferred.append(entry)
         if not preferred:
             return None
-        preferred.sort(key=lambda e: str(e.get("saved_at") or ""), reverse=True)
+        preferred.sort(key=lambda e: timestamp_sort_value(e.get("saved_at")), reverse=True)
         return preferred[0]
 
     def on_load_casts(self) -> None:
@@ -4326,8 +5386,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "認証情報未設定", "先にFFLogs V2のクライアント情報を設定してください。")
             return
         code = extract_report_code(self.input_report_code.text())
-        actor_id = self.selected_actor.get("id")
-        fight_id = self.selected_fight.get("id")
+        if not code:
+            QMessageBox.warning(self, "入力不正", "FFLogsレポートコードまたはURLを正しく入力してください。")
+            return
+        if self._fflogs_force_refresh_enabled():
+            self.ff_client.clear_cache()
+        fight = dict(self.selected_fight)
+        actor = dict(self.selected_actor)
+        actor_id = actor.get("id")
+        fight_id = fight.get("id")
+        start_time, end_time = self._resolve_phase_window(fight)
+        fight_end = fight.get("endTime", fight.get("end_time"))
+        enemy_npcs_snapshot = [dict(npc) for npc in self.enemy_npcs if isinstance(npc, dict)]
         job = self.current_gearset.job or ""
         friendly_ids = set(self.friendly_ids or set())
         # Capture baseline gearset for simdps. Prefer a saved set that matches this log context.
@@ -4336,6 +5406,12 @@ class MainWindow(QMainWindow):
         baseline_party = self.party_bonus.value()
         baseline_race = self._current_race()
         baseline_entry = self._find_simdps_baseline_entry(code, fight_id, actor_id)
+        self._simdps_baseline_exact = baseline_entry is not None
+        self._simdps_baseline_name = str(baseline_entry.get("name") or "") if baseline_entry else None
+        self._simdps_baseline_entry_id = baseline_entry.get("id") if baseline_entry else None
+        self._log_gcd_estimate = None
+        self._log_gcd_constraint = None
+        self._refresh_log_gcd_ui()
         if baseline_entry:
             try:
                 candidate = Gearset.from_dict(baseline_entry.get("gearset") or {})
@@ -4383,7 +5459,6 @@ class MainWindow(QMainWindow):
             pass
 
         def task(progress=None, stop_event=None):
-            start_time, end_time = self._resolve_phase_window(self.selected_fight)
             sim_log(
                 f"[flow] fetch_start report={code} fight_id={fight_id} actor_id={actor_id} "
                 f"start={start_time} end={end_time}"
@@ -4403,20 +5478,24 @@ class MainWindow(QMainWindow):
                 )
                 return filtered
 
-            enemy_npcs = self.enemy_npcs
+            enemy_npcs = enemy_npcs_snapshot
             if not enemy_npcs:
                 try:
                     self.ff_client.fetch_fights(code)
-                    enemy_npcs = self.ff_client.last_enemy_npcs
+                    enemy_npcs = [
+                        dict(npc)
+                        for npc in self.ff_client.last_enemy_npcs
+                        if isinstance(npc, dict)
+                    ]
                 except Exception:
-                    enemy_npcs = self.enemy_npcs
+                    enemy_npcs = enemy_npcs_snapshot
             if progress:
                 progress(-1, "ログ取得中...")
             with ThreadPoolExecutor(max_workers=3) as executor:
                 fut_casts = executor.submit(
                     self.ff_client.fetch_casts,
                     code,
-                    self.selected_fight,
+                    fight,
                     actor_id,
                     stop_event,
                     None,
@@ -4424,7 +5503,7 @@ class MainWindow(QMainWindow):
                 fut_timeline = executor.submit(
                     self.ff_client.fetch_actor_timeline_events,
                     code,
-                    self.selected_fight,
+                    fight,
                     actor_id,
                     True,
                     stop_event,
@@ -4433,7 +5512,7 @@ class MainWindow(QMainWindow):
                 fut_damage = executor.submit(
                     self.ff_client.fetch_damage_events,
                     code,
-                    self.selected_fight,
+                    fight,
                     actor_id,
                     True,
                     stop_event,
@@ -4527,7 +5606,6 @@ class MainWindow(QMainWindow):
             )
             if progress:
                 progress(-1, "ログ集計中...")
-            fight_end = self.selected_fight.get("endTime", self.selected_fight.get("end_time"))
             with ThreadPoolExecutor(max_workers=2) as executor:
                 fut_damage = executor.submit(
                     optimizer.summarize_damage,
@@ -4559,11 +5637,31 @@ class MainWindow(QMainWindow):
                 "action_data": action_data,
                 "status_data": status_data,
                 "enemy_npcs": enemy_npcs,
+                "request_context": {
+                    "report_code": code,
+                    "fight_id": fight_id,
+                    "actor_id": actor_id,
+                },
             }
 
-        self.start_worker(task, self._after_casts)
+        self.start_worker(task, self._after_casts, lock_fflogs_context=True)
 
     def _after_casts(self, payload) -> None:
+        if isinstance(payload, dict):
+            context = payload.get("request_context") or {}
+            report_code = context.get("report_code")
+            if report_code and not self._fflogs_context_matches(
+                report_code,
+                context.get("fight_id"),
+                context.get("actor_id"),
+            ):
+                logger.info(
+                    "Discarded stale FFLogs casts result for report %s fight %s actor %s",
+                    report_code,
+                    context.get("fight_id"),
+                    context.get("actor_id"),
+                )
+                return
         casts = payload.get("casts", []) if isinstance(payload, dict) else payload
         timeline = payload.get("timeline", []) if isinstance(payload, dict) else []
         damage = payload.get("damage", []) if isinstance(payload, dict) else []
@@ -4612,6 +5710,7 @@ class MainWindow(QMainWindow):
             or self._build_adps_summary()
         )
         self._update_simdps_baseline_data()
+        self._refresh_log_gcd_profile()
         sim_log(
             f"[simdps] timeline casts={len(self.casts)} timeline_events={len(self.timeline_events)} "
             f"actions_cached={len(self.action_data)} statuses_cached={len(self.status_data)}"
@@ -4937,6 +6036,91 @@ class MainWindow(QMainWindow):
         if self._simdps_baseline_race is None:
             self._simdps_baseline_race = DEFAULT_RACE
 
+    def _baseline_formula_gcd(self) -> Optional[float]:
+        gear = self._simdps_baseline_gearset
+        raw_stats = self._simdps_baseline_raw_stats
+        if not self._simdps_baseline_exact or gear is None or raw_stats is None or not gear.job:
+            return None
+        level_value = self._effective_calc_level()
+        food = self._simdps_baseline_food
+        comp = xivmath.build_computed_stats(
+            gear.job,
+            raw_stats,
+            self._get_job_mods(gear.job),
+            food.bonuses if food else None,
+            int(self._simdps_baseline_party or 0),
+            0,
+            0,
+            3.0,
+            race=self._simdps_baseline_race,
+            level=level_value,
+        )
+        speed = comp.spellspeed if gear.job in SPELL_SPEED_JOBS else comp.skillspeed
+        return optimizer.calc_gcd_seconds(speed, gear.job, level=level_value)
+
+    def _refresh_log_gcd_profile(self) -> None:
+        actor_id = self.selected_actor.get("id") if self.selected_actor else None
+        self._log_gcd_estimate = estimate_log_gcd(
+            self.casts or [],
+            self.action_data or {},
+            actor_id=int(actor_id) if actor_id is not None else None,
+        )
+        baseline_gcd = self._baseline_formula_gcd()
+        self._log_gcd_constraint = build_log_gcd_constraint(
+            self._log_gcd_estimate,
+            baseline_gcd,
+        )
+        self._refresh_log_gcd_ui()
+        estimate = self._log_gcd_estimate
+        sim_log(
+            f"[gcd] observed={estimate.seconds} confidence={estimate.confidence} "
+            f"samples={estimate.sample_count} raw_median_ms={estimate.raw_median_ms} "
+            f"tier_share={estimate.tier_share:.3f} baseline={baseline_gcd} "
+            f"constraint={'on' if self._log_gcd_constraint else 'off'}"
+        )
+
+    def _refresh_log_gcd_ui(self) -> None:
+        if not hasattr(self, "log_gcd_status_label"):
+            return
+        estimate = self._log_gcd_estimate
+        mode = self.calc_mode.currentData() if hasattr(self, "calc_mode") else "simdps_self"
+        usable = mode in {"simdps", "simdps_self"} and self._log_gcd_constraint is not None
+        self.chk_log_gcd_constraint.setEnabled(usable)
+        if estimate is None:
+            self.log_gcd_status_label.setText("ログGCD: 未取得")
+            self.log_gcd_status_label.setToolTip("キャスト取得後に実測GCDを推定します")
+            return
+        confidence_labels = {"high": "高", "medium": "中", "low": "低", "unavailable": "不可"}
+        confidence = confidence_labels.get(estimate.confidence, estimate.confidence)
+        seconds = f"{estimate.seconds:.2f}秒" if estimate.seconds is not None else "推定不可"
+        baseline_name = self._simdps_baseline_name or "未設定"
+        self.log_gcd_status_label.setText(
+            f"ログGCD: {seconds} ({confidence}, n={estimate.sample_count})"
+        )
+        if self._log_gcd_constraint is not None:
+            tooltip = (
+                f"基準セット: {baseline_name}\n"
+                f"基準理論GCD: {self._log_gcd_constraint.baseline_formula_seconds:.3f}秒"
+            )
+        elif not self._simdps_baseline_exact:
+            tooltip = "ログ識別子が一致する保存セットを右クリックし、ログ基準装備に設定してください"
+        else:
+            tooltip = estimate.reason or "実測GCDの信頼度または基準値との比率が不足しています"
+        if estimate.raw_median_ms is not None:
+            tooltip += (
+                f"\nログ間隔中央値: {estimate.raw_median_ms / 1000.0:.3f}秒"
+                f"\n表示GCD帯の支持率: {estimate.tier_share:.1%}"
+            )
+        self.log_gcd_status_label.setToolTip(tooltip)
+        self.chk_log_gcd_constraint.setToolTip(tooltip)
+
+    def _active_log_gcd_constraint(self, mode: str) -> Optional[LogGcdConstraint]:
+        if mode not in {"simdps", "simdps_self"}:
+            return None
+        if not self.chk_log_gcd_constraint.isChecked():
+            return None
+        return self._log_gcd_constraint
+
     def _resolve_simdps_baseline(
         self,
         fallback_raw: Dict[int, int],
@@ -5031,7 +6215,14 @@ class MainWindow(QMainWindow):
             materia_sig: Tuple[Tuple[int, int], ...] = ()
             if sel and sel.materia:
                 materia_sig = tuple((int(m.base_param), int(m.grade)) for m in sel.materia if m)
-            gear_sig.append((slot, item_id, materia_sig))
+            relic_sig = tuple(
+                sorted(
+                    (int(stat_id), int(value))
+                    for stat_id, value in self._selection_relic_stats(sel).items()
+                    if int(value or 0) > 0
+                )
+            ) if sel else ()
+            gear_sig.append((slot, item_id, materia_sig, relic_sig))
         weapon = selected_items.get("weapon")
         weapon_id = getattr(weapon, "item_id", None) if weapon else None
         summary_total = float(summary.get("total_amount") or summary.get("total_damage") or 0.0) if summary else 0.0
@@ -5073,11 +6264,16 @@ class MainWindow(QMainWindow):
             return
         job = self.current_gearset.job
         if not job:
+            self._set_pending_saved_score_recalculation_waiting("ジョブ情報がありません。")
             return
         mode = self.calc_mode.currentData() or "simdps_self"
         if mode == "dmg100p" and not self.jobs_data:
+            self._set_pending_saved_score_recalculation_waiting("装備データを読み込み中です。")
             return
         if mode in {"simdps", "simdps_self"} and not self.damage_summary:
+            self._set_pending_saved_score_recalculation_waiting(
+                "ファイトとアクターを選択して「キャスト取得」を実行してください。"
+            )
             return
 
         self._sync_ui_to_gearset()
@@ -5101,6 +6297,9 @@ class MainWindow(QMainWindow):
         if mode in {"simdps", "simdps_self"}:
             summary = self.damage_summary_self if mode == "simdps_self" else self.damage_summary
             if fight_ms <= 0 or not summary:
+                self._set_pending_saved_score_recalculation_waiting(
+                    "ファイトとアクターを選択して「キャスト取得」を実行してください。"
+                )
                 return
             sim_fight_ms = self._simdps_effective_duration_ms(fight_ms)
             preview_sig = self._build_preview_signature(
@@ -5363,7 +6562,22 @@ class MainWindow(QMainWindow):
             return
         entry_item = self.saved_sets_table.item(row, SAVED_COL_NAME)
         entry = entry_item.data(Qt.UserRole) if entry_item else None
-        is_locked = isinstance(entry, dict) and bool(entry.get("locked", False))
+        if not isinstance(entry, dict):
+            return
+        entry_id = entry.get("id")
+        if entry_id is None:
+            return
+        target = next(
+            (
+                saved
+                for saved in self.saved_sets
+                if isinstance(saved, dict) and saved.get("id") == entry_id
+            ),
+            None,
+        )
+        if target is None:
+            return
+        is_locked = bool(entry.get("locked", False))
         mode_item = self.saved_sets_table.item(row, SAVED_COL_MODE)
         score_item = self.saved_sets_table.item(row, SAVED_COL_SCORE)
         expected_score_item = self.saved_sets_table.item(row, SAVED_COL_EXPECTED_SCORE)
@@ -5371,20 +6585,43 @@ class MainWindow(QMainWindow):
         if expected_score is None:
             current_eval = self._evaluate_current_gearset_scores(mode)
             expected_score = current_eval[1] if current_eval else score
-        if mode_item:
-            mode_item.setText("XiVGear（Dmg/100p）" if mode == "dmg100p" else "試算DPS（logs基準）")
-        if score_item:
-            score_item.setText(self._format_saved_score(mode, score))
-        if expected_score_item:
-            expected_score_item.setText(self._format_saved_score(mode, expected_score))
-        if gcd_item:
-            gcd_item.setText(f"{gcd:.3f}s")
-
+        new_mode = self.calc_mode.currentData() or mode
         stats = self._compute_saved_stats(
             self.current_gearset,
             self.current_gearset.food_id,
             self.party_bonus.value(),
         )
+        if is_locked and not self._saved_score_context_matches_current(target, new_mode, stats):
+            saved_mode = str(target.get("mode") or "simdps")
+            saved_score_valid, saved_message = self._saved_score_validation(target)
+            saved_score = target.get("score")
+            saved_expected = self._saved_expected_score_value(target)
+            if mode_item:
+                mode_item.setText(
+                    "XiVGear（Dmg/100p）" if saved_mode == "dmg100p" else "試算DPS（logs基準）"
+                )
+            for cell, value in ((score_item, saved_score), (expected_score_item, saved_expected)):
+                if not cell:
+                    continue
+                cell.setText(self._format_saved_score(saved_mode, value) if saved_score_valid else "要再計算")
+                cell.setToolTip("" if saved_score_valid else saved_message)
+            if gcd_item:
+                saved_gcd = target.get("gcd")
+                try:
+                    saved_gcd_value = float(saved_gcd)
+                except (TypeError, ValueError):
+                    saved_gcd_value = 0.0
+                gcd_item.setText(f"{saved_gcd_value:.3f}s" if math.isfinite(saved_gcd_value) and saved_gcd_value > 0 else "-")
+            return
+        if mode_item:
+            mode_item.setText("XiVGear（Dmg/100p）" if new_mode == "dmg100p" else "試算DPS（logs基準）")
+        if score_item:
+            score_item.setText(self._format_saved_score(new_mode, score))
+        if expected_score_item:
+            expected_score_item.setText(self._format_saved_score(new_mode, expected_score))
+        if gcd_item:
+            gcd_item.setText(f"{gcd:.3f}s")
+
         if stats:
             main_stat_val = self._saved_stats_main_value(stats, self.current_gearset.job)
             for col, key in (
@@ -5405,45 +6642,47 @@ class MainWindow(QMainWindow):
         if food_cell:
             food_cell.setText(self._food_label_by_id(self.current_gearset.food_id))
         # 選択中セットは表示のみでなく、現在の構成と評価値で自動上書きする。
-        entry_item = self.saved_sets_table.item(row, SAVED_COL_NAME)
-        entry = entry_item.data(Qt.UserRole) if entry_item else None
-        if not isinstance(entry, dict):
-            return
-        entry_id = entry.get("id")
-        if entry_id is None:
-            return
-        target = None
-        for e in self.saved_sets:
-            if isinstance(e, dict) and e.get("id") == entry_id:
-                target = e
-                break
-        if target is None:
-            return
-        new_mode = self.calc_mode.currentData() or mode
         changed = False
         if target.get("mode") != new_mode:
             target["mode"] = new_mode
             changed = True
         old_score = target.get("score")
-        if old_score is None or abs(float(old_score) - float(score)) > 1e-9:
+        if self._saved_numeric_changed(old_score, score):
             target["score"] = float(score)
             changed = True
         old_expected_score = target.get("expected_score")
-        if old_expected_score is None or abs(float(old_expected_score) - float(expected_score)) > 1e-9:
+        if self._saved_numeric_changed(old_expected_score, expected_score):
             target["expected_score"] = float(expected_score)
             changed = True
         old_gcd = target.get("gcd")
-        if old_gcd is None or abs(float(old_gcd) - float(gcd)) > 1e-9:
+        if self._saved_numeric_changed(old_gcd, gcd):
             target["gcd"] = float(gcd)
             changed = True
         if is_locked:
+            if stats and target.get("stats") != stats:
+                target["stats"] = stats
+                target["stats_version"] = STATS_VERSION
+                changed = True
+            score_meta = self._build_score_meta_for_entry(target, new_mode)
+            if score_meta is None:
+                if target.pop("score_meta", None) is not None:
+                    changed = True
+            elif target.get("score_meta") != score_meta:
+                target["score_meta"] = score_meta
+                changed = True
             if changed:
-                target["saved_at"] = datetime.now().isoformat(timespec="seconds")
+                target["saved_at"] = utc_now_iso()
                 self._schedule_saved_sets_flush(immediate=False)
                 if isinstance(entry, dict):
                     entry.update(target)
                     if entry_item:
                         entry_item.setData(Qt.UserRole, entry)
+            score_valid, message = self._saved_score_validation(target)
+            for cell, value in ((score_item, score), (expected_score_item, expected_score)):
+                if not cell:
+                    continue
+                cell.setText(self._format_saved_score(new_mode, value) if score_valid else "要再計算")
+                cell.setToolTip("" if score_valid else message)
             return
         gear_dict = self.current_gearset.to_dict()
         new_food_id = self.current_gearset.food_id
@@ -5477,13 +6716,26 @@ class MainWindow(QMainWindow):
         if target.get("actor_id") != actor_id:
             target["actor_id"] = actor_id
             changed = True
+        score_meta = self._build_score_meta_for_entry(target, new_mode)
+        if score_meta is None:
+            if target.pop("score_meta", None) is not None:
+                changed = True
+        elif target.get("score_meta") != score_meta:
+            target["score_meta"] = score_meta
+            changed = True
         if changed:
-            target["saved_at"] = datetime.now().isoformat(timespec="seconds")
+            target["saved_at"] = utc_now_iso()
             self._schedule_saved_sets_flush(immediate=False)
             if isinstance(entry, dict):
                 entry.update(target)
                 if entry_item:
                     entry_item.setData(Qt.UserRole, entry)
+        score_valid, message = self._saved_score_validation(target)
+        for cell, value in ((score_item, score), (expected_score_item, expected_score)):
+            if not cell:
+                continue
+            cell.setText(self._format_saved_score(new_mode, value) if score_valid else "要再計算")
+            cell.setToolTip("" if score_valid else message)
 
     def _find_actor_entry(self, table: dict) -> Optional[dict]:
         entries = self._extract_damage_table_entries(table)
@@ -5805,6 +7057,471 @@ class MainWindow(QMainWindow):
                     continue
         return sorted(set(ids))
 
+    def _sorted_relic_stat_ids(
+        self,
+        job: Optional[str],
+        stat_caps: Optional[Dict[int, int]] = None,
+    ) -> List[int]:
+        allowed = set(optimizer.allowed_meld_stats(job or "")) if job else set(RELIC_STAT_ORDER)
+        if stat_caps is not None:
+            allowed &= {int(stat_id) for stat_id, value in stat_caps.items() if int(value or 0) > 0}
+        ordered = [stat_id for stat_id in RELIC_STAT_ORDER if stat_id in allowed]
+        extras = sorted(allowed.difference(ordered))
+        return ordered + extras
+
+    def _selection_relic_stats(self, selection: Optional[ItemSelection]) -> Dict[int, int]:
+        raw_stats = getattr(selection, "relic_stats", {}) or {}
+        if not isinstance(raw_stats, dict):
+            return {}
+        normalized: Dict[int, int] = {}
+        for raw_stat_id, raw_value in raw_stats.items():
+            try:
+                stat_id = int(raw_stat_id)
+                value = int(raw_value or 0)
+            except Exception:
+                continue
+            if stat_id <= 0 or value <= 0:
+                continue
+            normalized[stat_id] = value
+        return normalized
+
+    def _is_manderville_weapon_item(self, item: Optional[ItemRecord]) -> bool:
+        if not item:
+            return False
+        if str(getattr(item, "slot", "")) not in {"weapon", "offhand"}:
+            return False
+        if int(getattr(item, "materia_slots", 0) or 0) != 0:
+            return False
+        names = [
+            str(getattr(item, "name", "") or ""),
+            str(getattr(item, "name_ja", "") or ""),
+        ]
+        return any(
+            name.startswith(prefix)
+            for name in names
+            for prefix in MANDERVILLE_NAME_PREFIXES
+            if prefix
+        )
+
+    def _is_phantom_weapon_item(self, item: Optional[ItemRecord]) -> bool:
+        if not item or str(getattr(item, "slot", "")) not in {"weapon", "offhand"}:
+            return False
+        names = [
+            str(getattr(item, "name", "") or ""),
+            str(getattr(item, "name_ja", "") or ""),
+        ]
+        return any(
+            name.startswith(prefix)
+            for name in names
+            for prefix in PHANTOM_NAME_PREFIXES
+            if prefix
+        )
+
+    def _is_search_special_weapon_item(
+        self,
+        item: Optional[ItemRecord],
+        job: Optional[str],
+    ) -> bool:
+        if self._is_phantom_weapon_item(item):
+            return True
+        return self._relic_model_for_item(item, job) is not None
+
+    def _gear_search_relic_stat_variants(
+        self,
+        config: Optional[Dict[str, object]],
+    ) -> List[Dict[int, int]]:
+        if not config:
+            return []
+        allowed_stats = [int(stat_id) for stat_id in list(config.get("allowed_stats", []) or [])]
+        if not allowed_stats:
+            return []
+        variants: set[Tuple[Tuple[int, int], ...]] = set()
+        kind = str(config.get("kind") or "")
+        if kind == "manderville":
+            fixed_values = [int(value) for value in list(config.get("fixed_values", []) or [])]
+            if len(fixed_values) < 3:
+                return []
+            primary_value = fixed_values[0]
+            tertiary_value = fixed_values[2]
+            for primary_stats in combinations(allowed_stats, 2):
+                for tertiary_stat in allowed_stats:
+                    if tertiary_stat in primary_stats:
+                        continue
+                    stats = {
+                        int(primary_stats[0]): primary_value,
+                        int(primary_stats[1]): primary_value,
+                        int(tertiary_stat): tertiary_value,
+                    }
+                    variants.add(tuple(sorted(stats.items())))
+        elif kind == "resistance":
+            total_cap = int(config.get("total_cap", 0) or 0)
+            stat_caps = {
+                int(stat_id): int(value)
+                for stat_id, value in dict(config.get("stat_caps", {}) or {}).items()
+                if int(value or 0) > 0
+            }
+            if total_cap <= 0 or not stat_caps:
+                return []
+            usable_stats = [stat_id for stat_id in allowed_stats if stat_id in stat_caps]
+
+            def add_filled_variants(fixed_stats: Dict[int, int]) -> None:
+                remaining_total = total_cap - sum(fixed_stats.values())
+                remaining_stats = [
+                    stat_id for stat_id in usable_stats if stat_id not in fixed_stats
+                ]
+                for stat_order in permutations(remaining_stats):
+                    remaining = remaining_total
+                    stats = dict(fixed_stats)
+                    for stat_id in stat_order:
+                        value = min(stat_caps[stat_id], remaining)
+                        if value > 0:
+                            stats[stat_id] = value
+                            remaining -= value
+                        if remaining <= 0:
+                            break
+                    if remaining <= 0:
+                        variants.add(tuple(sorted(stats.items())))
+
+            add_filled_variants({})
+            allocation_step = 36
+            for pivot_stat in usable_stats:
+                pivot_cap = min(stat_caps[pivot_stat], total_cap)
+                for pivot_value in range(allocation_step, pivot_cap, allocation_step):
+                    add_filled_variants({pivot_stat: pivot_value})
+
+            for subset_size in range(2, len(usable_stats) + 1):
+                for stat_subset in combinations(usable_stats, subset_size):
+                    if sum(stat_caps[stat_id] for stat_id in stat_subset) < total_cap:
+                        continue
+                    for stat_order in permutations(stat_subset):
+                        remaining = total_cap
+                        stats = {stat_id: 0 for stat_id in stat_subset}
+                        while remaining > 0:
+                            progressed = False
+                            for stat_id in stat_order:
+                                if stats[stat_id] >= stat_caps[stat_id]:
+                                    continue
+                                stats[stat_id] += 1
+                                remaining -= 1
+                                progressed = True
+                                if remaining <= 0:
+                                    break
+                            if not progressed:
+                                break
+                        if remaining <= 0:
+                            variants.add(
+                                tuple(
+                                    sorted(
+                                        (stat_id, value)
+                                        for stat_id, value in stats.items()
+                                        if value > 0
+                                    )
+                                )
+                            )
+        return [dict(entries) for entries in sorted(variants)]
+
+    def _manderville_fixed_values_for_item(self, item: Optional[ItemRecord]) -> Tuple[int, int, int]:
+        if not item:
+            return MANDERVILLE_FIXED_STAT_VALUES
+        names = [
+            str(getattr(item, "name", "") or ""),
+            str(getattr(item, "name_ja", "") or ""),
+        ]
+        final_prefixes = ("Mandervillous", "マンダヴィラス")
+        if any(
+            name.startswith(prefix)
+            for name in names
+            for prefix in final_prefixes
+            if prefix
+        ):
+            return MANDERVILLOUS_FIXED_STAT_VALUES
+        return MANDERVILLE_FIXED_STAT_VALUES
+
+    def _special_weapon_kind_text(self, config: Optional[Dict[str, object]]) -> str:
+        kind = str((config or {}).get("kind") or "")
+        if kind == "manderville":
+            return "MW"
+        if kind == "resistance":
+            return "RW"
+        return "特殊武器"
+
+    def _special_weapon_dialog_title(self, slot: str, config: Optional[Dict[str, object]]) -> str:
+        kind = str((config or {}).get("kind") or "")
+        slot_label = SLOT_LABELS.get(slot, slot)
+        if kind == "manderville":
+            return f"{slot_label} のマンダヴィル補正"
+        if kind == "resistance":
+            return f"{slot_label} のレジスタンス補正"
+        return f"{slot_label} の特殊武器補正"
+
+    def _special_weapon_group_key(self, item: Optional[ItemRecord], job: Optional[str]) -> str:
+        if self._is_phantom_weapon_item(item):
+            return "phantom"
+        config = self._relic_model_for_item(item, job)
+        kind = str((config or {}).get("kind") or "").strip().lower()
+        return kind or "normal"
+
+    def _relic_model_for_item(self, item: Optional[ItemRecord], job: Optional[str]) -> Optional[Dict[str, object]]:
+        if not item or not job:
+            return None
+        cache_key = (int(getattr(item, "item_id", 0) or 0), str(job))
+        cached = self._relic_model_cache.get(cache_key)
+        if cached is not None or cache_key in self._relic_model_cache:
+            return cached
+        if str(getattr(item, "slot", "")) not in {"weapon", "offhand"}:
+            self._relic_model_cache[cache_key] = None
+            return None
+        if self._is_manderville_weapon_item(item):
+            config = {
+                "kind": "manderville",
+                "item_ilvl": int(getattr(item, "ilvl", 0) or 0),
+                "fixed_values": list(self._manderville_fixed_values_for_item(item)),
+                "allowed_stats": self._sorted_relic_stat_ids(job),
+            }
+            self._relic_model_cache[cache_key] = config
+            return config
+        if not self.base_params or not self.item_levels:
+            self._relic_model_cache[cache_key] = None
+            return None
+        if int(getattr(item, "materia_slots", 0) or 0) != 0:
+            self._relic_model_cache[cache_key] = None
+            return None
+        ilvl = int(getattr(item, "ilvl", 0) or 0)
+        base_total_cap = RELIC_TOTAL_CAP_BY_ILVL.get(ilvl)
+        if not base_total_cap:
+            self._relic_model_cache[cache_key] = None
+            return None
+        main_stat_id = self._main_stat_id_for_job(job)
+        present_stats = {
+            int(stat_id)
+            for stat_id, value in (getattr(item, "base_params_hq", {}) or {}).items()
+            if int(value or 0) > 0
+        }
+        if present_stats and not present_stats.issubset({main_stat_id, 3}):
+            self._relic_model_cache[cache_key] = None
+            return None
+        crit_bp = self.base_params.get(27)
+        occ_slot = getattr(item, "occ_slot", None) or getattr(item, "slot", "")
+        slot_scale = getattr(crit_bp, "slots", {}).get(occ_slot) if crit_bp else None
+        if slot_scale is None:
+            self._relic_model_cache[cache_key] = None
+            return None
+        total_cap = int(round(float(base_total_cap) * (float(slot_scale) / 140.0)))
+        stat_caps_raw = optimizer.compute_item_stat_caps_for_il(
+            item,
+            self.base_params,
+            self.item_levels,
+            job,
+            ilvl,
+        )
+        if not stat_caps_raw:
+            self._relic_model_cache[cache_key] = None
+            return None
+        stat_caps: Dict[int, int] = {}
+        for stat_id in self._sorted_relic_stat_ids(job):
+            cap_val = int(stat_caps_raw.get(stat_id, 0) or 0)
+            if cap_val > 0:
+                stat_caps[int(stat_id)] = cap_val
+        if not stat_caps:
+            self._relic_model_cache[cache_key] = None
+            return None
+        config = {
+            "kind": "resistance",
+            "item_ilvl": ilvl,
+            "total_cap": total_cap,
+            "stat_caps": stat_caps,
+            "allowed_stats": self._sorted_relic_stat_ids(job, stat_caps),
+        }
+        self._relic_model_cache[cache_key] = config
+        return config
+
+    def _effective_manderville_stats_from_config(
+        self,
+        raw_stats: Dict[int, int],
+        config: Optional[Dict[str, object]],
+    ) -> Dict[int, int]:
+        if not config:
+            return {}
+        allowed_stats = [int(stat_id) for stat_id in list(config.get("allowed_stats", []) or [])]
+        if not allowed_stats:
+            return {}
+        fixed_values = list(config.get("fixed_values", []) or [])
+        primary_value = int(fixed_values[0]) if len(fixed_values) >= 1 else MANDERVILLE_PRIMARY_STAT_VALUE
+        tertiary_value = int(fixed_values[2]) if len(fixed_values) >= 3 else MANDERVILLE_TERTIARY_STAT_VALUE
+        primary_stats = [
+            stat_id
+            for stat_id in allowed_stats
+            if int(raw_stats.get(stat_id, 0) or 0) == primary_value
+        ]
+        tertiary_stats = [
+            stat_id
+            for stat_id in allowed_stats
+            if int(raw_stats.get(stat_id, 0) or 0) == tertiary_value
+        ]
+        effective: Dict[int, int] = {}
+        for stat_id in primary_stats[:2]:
+            effective[int(stat_id)] = primary_value
+        for stat_id in tertiary_stats:
+            if int(stat_id) in effective:
+                continue
+            effective[int(stat_id)] = tertiary_value
+            break
+        return effective
+
+    def _manderville_selection_slots(
+        self,
+        selection: Optional[ItemSelection],
+        config: Optional[Dict[str, object]],
+    ) -> Tuple[Optional[int], Optional[int], Optional[int]]:
+        effective_stats = self._effective_manderville_stats_from_config(
+            self._selection_relic_stats(selection),
+            config,
+        )
+        allowed_stats = [int(stat_id) for stat_id in list((config or {}).get("allowed_stats", []) or [])]
+        fixed_values = list((config or {}).get("fixed_values", []) or [])
+        primary_value = int(fixed_values[0]) if len(fixed_values) >= 1 else MANDERVILLE_PRIMARY_STAT_VALUE
+        tertiary_value = int(fixed_values[2]) if len(fixed_values) >= 3 else MANDERVILLE_TERTIARY_STAT_VALUE
+        primary_stats = [
+            stat_id
+            for stat_id in allowed_stats
+            if int(effective_stats.get(stat_id, 0) or 0) == primary_value
+        ]
+        tertiary_stat = next(
+            (
+                stat_id
+                for stat_id in allowed_stats
+                if int(effective_stats.get(stat_id, 0) or 0) == tertiary_value
+            ),
+            None,
+        )
+        first = primary_stats[0] if len(primary_stats) >= 1 else None
+        second = primary_stats[1] if len(primary_stats) >= 2 else None
+        return first, second, tertiary_stat
+
+    def _effective_relic_stats_from_config(
+        self,
+        selection: Optional[ItemSelection],
+        config: Optional[Dict[str, object]],
+    ) -> Dict[int, int]:
+        if not config:
+            return {}
+        raw_stats = self._selection_relic_stats(selection)
+        if not raw_stats:
+            return {}
+        if str(config.get("kind") or "") == "manderville":
+            return self._effective_manderville_stats_from_config(raw_stats, config)
+        remaining_total = int(config.get("total_cap", 0) or 0)
+        stat_caps = config.get("stat_caps", {}) or {}
+        effective: Dict[int, int] = {}
+        for stat_id in config.get("allowed_stats", []):
+            try:
+                requested = int(raw_stats.get(int(stat_id), 0) or 0)
+            except Exception:
+                continue
+            if requested <= 0:
+                continue
+            per_stat_cap = int(stat_caps.get(int(stat_id), 0) or 0)
+            applied = min(requested, per_stat_cap, remaining_total)
+            if applied <= 0:
+                continue
+            effective[int(stat_id)] = applied
+            remaining_total -= applied
+            if remaining_total <= 0:
+                break
+        return effective
+
+    def _effective_relic_stats_for_selection(
+        self,
+        selection: Optional[ItemSelection],
+        item: Optional[ItemRecord],
+        job: Optional[str],
+    ) -> Dict[int, int]:
+        config = self._relic_model_for_item(item, job)
+        return self._effective_relic_stats_from_config(selection, config)
+
+    def _item_with_relic_stats(
+        self,
+        item: ItemRecord,
+        selection: Optional[ItemSelection],
+        job: Optional[str],
+    ) -> Tuple[ItemRecord, Optional[Dict[str, object]], Dict[int, int]]:
+        config = self._relic_model_for_item(item, job)
+        if not config:
+            return item, None, {}
+        relic_stats = self._effective_relic_stats_from_config(selection, config)
+        if not relic_stats:
+            return item, config, {}
+        base_stats = dict(item.base_params or {})
+        hq_stats = dict(item.base_params_hq or {})
+        for stat_id, value in relic_stats.items():
+            base_stats[stat_id] = int(base_stats.get(stat_id, 0) or 0) + int(value)
+            hq_stats[stat_id] = int(hq_stats.get(stat_id, 0) or 0) + int(value)
+        relic_item = ItemRecord(
+            item_id=item.item_id,
+            name=item.name,
+            name_ja=item.name_ja,
+            jobs=list(item.jobs),
+            ilvl=int(item.ilvl),
+            slot=item.slot,
+            materia_slots=int(item.materia_slots or 0),
+            overmeld=bool(item.overmeld),
+            base_params=base_stats,
+            base_params_hq=hq_stats,
+            damage_phys=item.damage_phys,
+            damage_mag=item.damage_mag,
+            delay_ms=item.delay_ms,
+            occ_slot=item.occ_slot,
+            unique=bool(item.unique),
+            icon_url=item.icon_url,
+        )
+        return relic_item, config, relic_stats
+
+    def _effective_item_for_selection(
+        self,
+        item: ItemRecord,
+        selection: Optional[ItemSelection],
+        job: Optional[str],
+        sync_il_override: object = _USE_CURRENT_SYNC,
+    ) -> Tuple[ItemRecord, bool, Optional[Dict[str, object]], Dict[int, int]]:
+        relic_item, relic_config, relic_stats = self._item_with_relic_stats(item, selection, job)
+        effective_item, synced = self._apply_level_sync_to_item(
+            relic_item,
+            job,
+            sync_il_override=sync_il_override,
+        )
+        return effective_item, synced, relic_config, relic_stats
+
+    def _relic_stats_summary_text(
+        self,
+        selection: Optional[ItemSelection],
+        item: Optional[ItemRecord],
+        job: Optional[str],
+    ) -> str:
+        config = self._relic_model_for_item(item, job)
+        if not config:
+            return ""
+        effective_stats = self._effective_relic_stats_for_selection(selection, item, job)
+        prefix = self._special_weapon_kind_text(config)
+        if str(config.get("kind") or "") == "manderville":
+            if not effective_stats:
+                return f"{prefix} 未設定"
+            parts = [
+                f"{STAT_ABBR.get(int(stat_id), str(stat_id))}{int(value)}"
+                for stat_id, value in effective_stats.items()
+                if int(value or 0) > 0
+            ]
+            return f"{prefix} {' / '.join(parts)}"
+        used_total = sum(int(v) for v in effective_stats.values())
+        total_cap = int(config.get("total_cap", 0) or 0)
+        if not effective_stats:
+            return f"{prefix} 未設定 (0/{total_cap})"
+        parts = [
+            f"{STAT_ABBR.get(int(stat_id), str(stat_id))}{int(value)}"
+            for stat_id, value in effective_stats.items()
+            if int(value or 0) > 0
+        ]
+        return f"{prefix} {' / '.join(parts)} ({used_total}/{total_cap})"
+
     def _update_slot_materia_display(self, slot: str) -> None:
         layout = getattr(self, "slot_materia_layouts", {}).get(slot)
         if layout is None:
@@ -5820,10 +7537,25 @@ class MainWindow(QMainWindow):
             layout.addWidget(QLabel("装備不明"))
             layout.addStretch(1)
             return
-        effective_item, synced = self._apply_level_sync_to_item(item, self.current_gearset.job)
+        effective_item, synced, relic_config, _relic_stats = self._effective_item_for_selection(
+            item,
+            sel,
+            self.current_gearset.job,
+        )
+        if relic_config:
+            relic_summary = QLabel(self._relic_stats_summary_text(sel, item, self.current_gearset.job))
+            relic_summary.setToolTip("特殊武器のサブステータス設定")
+            layout.addWidget(relic_summary)
+            btn_relic = QPushButton(SPECIAL_WEAPON_EDIT_BUTTON_LABEL)
+            btn_relic.setToolTip("特殊武器のサブステータスを編集")
+            btn_relic.clicked.connect(lambda _checked=False, s=slot: self._open_relic_stat_editor(s))
+            layout.addWidget(btn_relic)
         slots_total = optimizer.total_meld_slots_for_item(effective_item)
         if slots_total <= 0:
-            layout.addWidget(QLabel("レベルシンク中はマテリア無効" if synced else "スロットなし"))
+            if not relic_config:
+                layout.addWidget(QLabel("レベルシンク中はマテリア無効" if synced else "スロットなし"))
+            elif synced:
+                layout.addWidget(QLabel("レベルシンク中はマテリア無効"))
             layout.addStretch(1)
             return
         self._ensure_materia_slots(sel, slots_total)
@@ -5927,20 +7659,6 @@ class MainWindow(QMainWindow):
         )
         self.icon_thread_pool.start(worker)
 
-    def _on_icon_fetched_signal(self, data: Optional[bytes]) -> None:
-        sender = self.sender()
-        url = getattr(sender, "_icon_url", None) if sender else None
-        if not url:
-            return
-        self._on_icon_fetched(url, data)
-
-    def _on_icon_failed_signal(self, _trace: str) -> None:
-        sender = self.sender()
-        url = getattr(sender, "_icon_url", None) if sender else None
-        if not url:
-            return
-        self._on_icon_failed(url)
-
     def _on_icon_fetched(self, url: str, data: Optional[bytes]) -> None:
         self._icon_fetching.discard(url)
         self._icon_workers.pop(url, None)
@@ -5997,11 +7715,12 @@ class MainWindow(QMainWindow):
         if not self.materia_catalog:
             return
         self._prefetch_icons_started = True
-        urls = []
-        for cat in self.materia_catalog.values():
-            for grade in cat.grades:
-                if grade.icon_url:
-                    urls.append(grade.icon_url)
+        urls = [
+            grade.icon_url
+            for cat in self.materia_catalog.values()
+            for grade in cat.grades
+            if grade.icon_url
+        ]
         unique_urls = list(dict.fromkeys(urls))
         for url in unique_urls:
             if url in self._materia_icon_cache:
@@ -6056,8 +7775,10 @@ class MainWindow(QMainWindow):
         for stat_id, cat in self.materia_catalog.items():
             if stat_id not in allowed_stats:
                 continue
-            for grade in optimizer.allowed_grades_for_slot(effective_item, cat.grades, slot_idx):
-                options.append((stat_id, grade))
+            options.extend(
+                (stat_id, grade)
+                for grade in optimizer.allowed_grades_for_slot(effective_item, cat.grades, slot_idx)
+            )
         if not options:
             QMessageBox.information(self, "マテリアなし", "このスロットに装着可能なマテリアがありません。")
             return
@@ -6114,8 +7835,242 @@ class MainWindow(QMainWindow):
         self._refresh_slot_selected_display(slot)
         self._schedule_auto_score_update()
 
+    def _open_relic_stat_editor(self, slot: str) -> None:
+        sel = self.current_gearset.items.get(slot)
+        if not sel or not sel.item_id:
+            return
+        item = self.items_by_id.get(sel.item_id)
+        if not item:
+            return
+        relic_config = self._relic_model_for_item(item, self.current_gearset.job)
+        if not relic_config:
+            QMessageBox.information(self, "編集不可", "この装備は手動サブステータス設定に対応していません。")
+            return
+        current_raw = self._selection_relic_stats(sel)
+        total_cap = int(relic_config.get("total_cap", 0) or 0)
+        stat_caps = relic_config.get("stat_caps", {}) or {}
+        stat_ids = list(relic_config.get("allowed_stats", []) or [])
+        kind = str(relic_config.get("kind") or "")
+
+        if kind == "manderville":
+            dialog = QDialog(self)
+            dialog.setWindowTitle(self._special_weapon_dialog_title(slot, relic_config))
+            dialog.setMinimumWidth(380)
+            dialog_layout = QVBoxLayout(dialog)
+            item_name = display_name_with_fallback(getattr(item, "name_ja", None), item.name)
+            item_label = QLabel(f"[IL{int(item.ilvl or 0)}] {item_name}")
+            item_label.setWordWrap(True)
+            dialog_layout.addWidget(item_label)
+            help_label = QLabel(
+                "第1・第2ステータスは293、第3ステータスは72固定です。3つの異なるサブステータスを選択してください。"
+            )
+            help_label.setWordWrap(True)
+            dialog_layout.addWidget(help_label)
+            form = QFormLayout()
+            combo_first = QComboBox(dialog)
+            combo_second = QComboBox(dialog)
+            combo_third = QComboBox(dialog)
+            fixed_values = list(relic_config.get("fixed_values", []) or [])
+            primary_value = int(fixed_values[0]) if len(fixed_values) >= 1 else MANDERVILLE_PRIMARY_STAT_VALUE
+            tertiary_value = int(fixed_values[2]) if len(fixed_values) >= 3 else MANDERVILLE_TERTIARY_STAT_VALUE
+            current_first, current_second, current_third = self._manderville_selection_slots(sel, relic_config)
+            help_label.setText(
+                f"第1・第2ステータスは{primary_value}、第3ステータスは{tertiary_value}固定です。"
+                " 3つの異なるサブステータスを選択してください。"
+            )
+            form.addRow(f"第1ステータス ({primary_value})", combo_first)
+            form.addRow(f"第2ステータス ({primary_value})", combo_second)
+            form.addRow(f"第3ステータス ({tertiary_value})", combo_third)
+            dialog_layout.addLayout(form)
+            status_label = QLabel()
+            status_label.setWordWrap(True)
+            dialog_layout.addWidget(status_label)
+
+            def _current_combo_values() -> Tuple[Optional[int], Optional[int], Optional[int]]:
+                return (
+                    combo_first.currentData(),
+                    combo_second.currentData(),
+                    combo_third.currentData(),
+                )
+
+            def _refresh_manderville_combo_options() -> None:
+                current_values = _current_combo_values()
+                combos = [combo_first, combo_second, combo_third]
+                for idx, combo in enumerate(combos):
+                    selected_value = current_values[idx]
+                    excluded = {
+                        int(value)
+                        for pos, value in enumerate(current_values)
+                        if pos != idx and value is not None
+                    }
+                    with QSignalBlocker(combo):
+                        combo.clear()
+                        combo.addItem("未選択", None)
+                        for stat_id in stat_ids:
+                            stat_id_int = int(stat_id)
+                            if stat_id_int in excluded and stat_id_int != selected_value:
+                                continue
+                            combo.addItem(STAT_ABBR.get(stat_id_int, str(stat_id_int)), stat_id_int)
+                        combo.setCurrentIndex(max(0, combo.findData(selected_value)))
+                selected_values = [value for value in _current_combo_values() if value is not None]
+                if not selected_values:
+                    status_label.setText("未設定")
+                    status_label.setStyleSheet("")
+                    return
+                if len(selected_values) != 3:
+                    status_label.setText("3つすべてのサブステータスを選択してください。")
+                    status_label.setStyleSheet("color: #e5c07b;")
+                    return
+                if len(set(selected_values)) != 3:
+                    status_label.setText("同じサブステータスは重複選択できません。")
+                    status_label.setStyleSheet("color: #e06c75;")
+                    return
+                status_label.setText(
+                    " / ".join(
+                        [
+                            f"{STAT_ABBR.get(int(selected_values[0]), str(selected_values[0]))}{primary_value}",
+                            f"{STAT_ABBR.get(int(selected_values[1]), str(selected_values[1]))}{primary_value}",
+                            f"{STAT_ABBR.get(int(selected_values[2]), str(selected_values[2]))}{tertiary_value}",
+                        ]
+                    )
+                )
+                status_label.setStyleSheet("color: #98c379;")
+
+            for combo in (combo_first, combo_second, combo_third):
+                combo.currentIndexChanged.connect(_refresh_manderville_combo_options)
+            _refresh_manderville_combo_options()
+
+            buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, parent=dialog)
+            btn_reset = buttons.addButton("リセット", QDialogButtonBox.ResetRole)
+
+            def _reset_values() -> None:
+                for combo in (combo_first, combo_second, combo_third):
+                    combo.setCurrentIndex(0)
+
+            def _save_manderville_values() -> None:
+                selected_values = list(_current_combo_values())
+                chosen_ids = [value for value in selected_values if value is not None]
+                if chosen_ids and len(chosen_ids) != 3:
+                    QMessageBox.warning(dialog, "入力不足", "3つすべてのサブステータスを選択してください。")
+                    return
+                if len(chosen_ids) != len(set(chosen_ids)):
+                    QMessageBox.warning(dialog, "重複選択", "同じサブステータスは重複選択できません。")
+                    return
+                if not chosen_ids:
+                    new_stats = {}
+                else:
+                    new_stats = {
+                        int(selected_values[0]): primary_value,
+                        int(selected_values[1]): primary_value,
+                        int(selected_values[2]): tertiary_value,
+                    }
+                sel.relic_stats = new_stats
+                self.current_gearset.items[slot] = sel
+                self._raw_stats_cache.clear()
+                self._refresh_slot_selected_display(slot)
+                self._persist_current_gearset_to_selected_saved_set()
+                self._schedule_auto_score_update()
+                dialog.accept()
+
+            btn_reset.clicked.connect(_reset_values)
+            buttons.accepted.connect(_save_manderville_values)
+            buttons.rejected.connect(dialog.reject)
+            dialog_layout.addWidget(buttons)
+            dialog.exec()
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self._special_weapon_dialog_title(slot, relic_config))
+        dialog.setMinimumWidth(360)
+        dialog_layout = QVBoxLayout(dialog)
+        item_name = display_name_with_fallback(getattr(item, "name_ja", None), item.name)
+        item_label = QLabel(f"[IL{int(item.ilvl or 0)}] {item_name}")
+        item_label.setWordWrap(True)
+        dialog_layout.addWidget(item_label)
+        help_label = QLabel(
+            "サブステータスを手動入力します。各ステータスは個別上限を超えず、合計値は総量上限以内に収めてください。"
+        )
+        help_label.setWordWrap(True)
+        dialog_layout.addWidget(help_label)
+        form = QFormLayout()
+        spin_boxes: Dict[int, QSpinBox] = {}
+        for stat_id in stat_ids:
+            spin = QSpinBox(dialog)
+            cap_val = int(stat_caps.get(int(stat_id), 0) or 0)
+            spin.setRange(0, max(0, cap_val))
+            spin.setValue(max(0, min(cap_val, int(current_raw.get(int(stat_id), 0) or 0))))
+            spin.setSingleStep(1)
+            spin.setAccelerated(True)
+            spin_boxes[int(stat_id)] = spin
+            form.addRow(f"{STAT_ABBR.get(int(stat_id), str(stat_id))} (max {cap_val})", spin)
+        dialog_layout.addLayout(form)
+        status_label = QLabel()
+        status_label.setWordWrap(True)
+        dialog_layout.addWidget(status_label)
+
+        def _update_status() -> None:
+            used = sum(spin.value() for spin in spin_boxes.values())
+            remaining = total_cap - used
+            if remaining < 0:
+                status_label.setText(f"総量上限 {total_cap} を {abs(remaining)} 超過しています。")
+                status_label.setStyleSheet("color: #e06c75;")
+            else:
+                status_label.setText(f"使用量 {used} / {total_cap}  残り {remaining}")
+                status_label.setStyleSheet("color: #98c379;")
+
+        for spin in spin_boxes.values():
+            spin.valueChanged.connect(_update_status)
+        _update_status()
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, parent=dialog)
+        btn_reset = buttons.addButton("リセット", QDialogButtonBox.ResetRole)
+
+        def _reset_values() -> None:
+            for spin in spin_boxes.values():
+                spin.setValue(0)
+
+        def _save_values() -> None:
+            used = sum(spin.value() for spin in spin_boxes.values())
+            if used > total_cap:
+                QMessageBox.warning(
+                    dialog,
+                    "上限超過",
+                    f"サブステータス合計が総量上限 {total_cap} を超えています。",
+                )
+                return
+            new_stats = {
+                int(stat_id): int(spin.value())
+                for stat_id, spin in spin_boxes.items()
+                if int(spin.value()) > 0
+            }
+            sel.relic_stats = new_stats
+            self.current_gearset.items[slot] = sel
+            self._raw_stats_cache.clear()
+            self._refresh_slot_selected_display(slot)
+            self._persist_current_gearset_to_selected_saved_set()
+            self._schedule_auto_score_update()
+            dialog.accept()
+
+        btn_reset.clicked.connect(_reset_values)
+        buttons.accepted.connect(_save_values)
+        buttons.rejected.connect(dialog.reject)
+        dialog_layout.addWidget(buttons)
+        dialog.exec()
+
     def _apply_melds_to_item_stats(self, item, melds: List[MateriaSlotSelection]) -> Dict[int, int]:
-        effective_item, synced = self._apply_level_sync_to_item(item, self.current_gearset.job)
+        slot = getattr(item, "slot", "")
+        sel = None
+        for slot_name, candidate_sel in (self.current_gearset.items or {}).items():
+            if int(getattr(candidate_sel, "item_id", 0) or 0) != int(getattr(item, "item_id", 0) or 0):
+                continue
+            if slot_name == slot or (slot_name.startswith("ring") and slot == "ring"):
+                sel = candidate_sel
+                break
+        effective_item, synced, _relic_config, _relic_stats = self._effective_item_for_selection(
+            item,
+            sel,
+            self.current_gearset.job,
+        )
         stats = dict(effective_item.base_params_hq)
         if synced:
             return stats
@@ -6161,7 +8116,11 @@ class MainWindow(QMainWindow):
             item = self.items_by_id.get(item_id)
             if not item:
                 return
-            effective_item, _synced = self._apply_level_sync_to_item(item, self.current_gearset.job)
+            effective_item, _synced, _relic_config, _relic_stats = self._effective_item_for_selection(
+                item,
+                sel,
+                self.current_gearset.job,
+            )
             stats = self._apply_melds_to_item_stats(item, sel.materia) if use_melds and sel else effective_item.base_params_hq
             self._set_table_text(table, row, 2, str(effective_item.materia_slots))
             self._set_table_text(table, row, 3, str(stats.get(27, 0)))
@@ -6254,7 +8213,12 @@ class MainWindow(QMainWindow):
                 item = self.items_by_id.get(item_id)
                 if not item:
                     continue
-                effective_item, _synced = self._apply_level_sync_to_item(item, self.current_gearset.job)
+                display_sel = sel if selected_id == item_id and sel else None
+                effective_item, _synced, _relic_config, _relic_stats = self._effective_item_for_selection(
+                    item,
+                    display_sel,
+                    self.current_gearset.job,
+                )
                 if selected_id == item_id and sel:
                     stats = self._apply_melds_to_item_stats(item, sel.materia)
                 else:
@@ -6276,28 +8240,38 @@ class MainWindow(QMainWindow):
             self._refresh_slot_selected_display(slot)
 
     # ---- Gear data handlers ----
+    def _gear_jobs_to_refresh(self) -> List[str]:
+        jobs = {str(job) for job in self.items_by_job if job}
+        current_job = self.current_gearset.job
+        combo_job = self.job_combo.currentData() if hasattr(self, "job_combo") else None
+        if current_job:
+            jobs.add(str(current_job))
+        if combo_job:
+            jobs.add(str(combo_job))
+        for entry in self.saved_sets or []:
+            gearset_data = entry.get("gearset") if isinstance(entry, dict) else None
+            saved_job = gearset_data.get("job") if isinstance(gearset_data, dict) else None
+            if saved_job:
+                jobs.add(str(saved_job))
+        return sorted(jobs)
+
     def on_fetch_gear_data(self) -> None:
         force = self.chk_force_gear.isChecked()
+        jobs_to_refresh = self._gear_jobs_to_refresh() if force else []
 
         def task(progress=None, stop_event=None):
-            bp = self.xiv_client.fetch_base_params(force=force)
-            if progress:
-                progress(20, "基礎ステータス取得中")
-            materia = self.xiv_client.fetch_materia(force=force)
-            if progress:
-                progress(50, "マテリア取得中")
-            food = self.xiv_client.fetch_food(force=force)
-            if progress:
-                progress(70, "食事データ取得中")
-            levels = self.xiv_client.fetch_item_levels(force=force)
-            if progress:
-                progress(85, "ItemLevel取得中")
-            jobs = self.xiv_client.fetch_jobs(force=force)
-            if progress:
-                progress(100, "ジョブデータ取得完了")
-            return {"bp": bp, "materia": materia, "food": food, "jobs": jobs, "levels": levels, "from_cache": False}
+            return self.gear_data_service.fetch(
+                force=force,
+                jobs_to_refresh=jobs_to_refresh,
+                progress=progress,
+                stop_event=stop_event,
+            )
 
-        self.start_worker(task, lambda res: self._after_gear_data(res, from_cache=bool(res.get("from_cache"))))
+        self.start_worker(
+            task,
+            lambda res: self._after_gear_data(res, from_cache=bool(res.get("from_cache"))),
+            lock_job_context=True,
+        )
 
     def _after_gear_data(self, result: dict, from_cache: bool = False) -> None:
         self.base_params = result.get("bp", {})
@@ -6305,8 +8279,21 @@ class MainWindow(QMainWindow):
         self.foods = [f for f in (result.get("food", []) or []) if optimizer.is_combat_food(f)]
         self.jobs_data = result.get("jobs", {})
         self.item_levels = result.get("levels", {})
+        refreshed_items = result.get("items_by_job") or {}
+        if isinstance(refreshed_items, dict) and refreshed_items:
+            for refreshed_job, items in refreshed_items.items():
+                self.items_by_job[str(refreshed_job)] = list(items or [])
+            self.items_by_id = {
+                item.item_id: item
+                for items in self.items_by_job.values()
+                for item in items
+                if getattr(item, "item_id", None) is not None
+            }
         self._rebuild_food_lookup_cache()
         self._job_mods_cache.clear()
+        self._relic_model_cache.clear()
+        self._display_sync_item_cache.clear()
+        self._saved_stats_cache.clear()
         self._raw_stats_cache.clear()
         job = self.current_gearset.job
         if job and job in self.items_by_job:
@@ -6316,6 +8303,9 @@ class MainWindow(QMainWindow):
                 self.item_levels,
                 job,
             )
+            if refreshed_items:
+                self._init_il_filter_for_job(job, self.items_by_job[job], force=True)
+                self.populate_items(job)
         self.refresh_food_combo()
         self._refresh_saved_sets_table()
         QTimer.singleShot(0, self._ensure_initial_job_items_loaded)
@@ -6324,7 +8314,15 @@ class MainWindow(QMainWindow):
         if from_cache:
             self.progress_label.setText("装備データをキャッシュから読み込みました。")
         else:
-            QMessageBox.information(self, "完了", "基礎ステ・マテリア・食事・ジョブ・ItemLevelをキャッシュしました。")
+            if result.get("forced") and hasattr(self, "chk_force_gear"):
+                self.chk_force_gear.setChecked(False)
+            refreshed_count = len(refreshed_items) if isinstance(refreshed_items, dict) else 0
+            suffix = f"、ジョブ別装備 {refreshed_count}件" if refreshed_count else ""
+            QMessageBox.information(
+                self,
+                "完了",
+                f"基礎ステ・マテリア・食事・ジョブ・ItemLevel{suffix}をキャッシュしました。",
+            )
 
     def _ensure_initial_job_items_loaded(self) -> None:
         if self._applying_gearset or self._is_populating:
@@ -6346,13 +8344,19 @@ class MainWindow(QMainWindow):
         def task(progress=None, stop_event=None):
             return self.xiv_client.fetch_items_for_jobs([job], force=False, progress=progress, stop_event=stop_event)
 
-        self.start_worker(task, lambda items: self._after_items(job, items), silent_if_busy=True)
+        self.start_worker(
+            task,
+            lambda items: self._after_items(job, items),
+            silent_if_busy=True,
+            lock_job_context=True,
+        )
 
     def on_job_changed(self) -> None:
         if self._applying_gearset:
             return
         job = self.job_combo.currentData()
         self.current_gearset.job = job
+        self._current_export_item_ids = {}
         self._refresh_saved_sets_table()
         if not job:
             return
@@ -6373,7 +8377,11 @@ class MainWindow(QMainWindow):
             items = self.xiv_client.fetch_items_for_jobs([job], force=False, progress=progress, stop_event=stop_event)
             return items
 
-        self.start_worker(task, lambda items: self._after_items(job, items))
+        self.start_worker(
+            task,
+            lambda items: self._after_items(job, items),
+            lock_job_context=True,
+        )
 
     def _default_il_range_for_job(self, job: str, items: List) -> Tuple[int, int]:
         if not items:
@@ -6417,7 +8425,15 @@ class MainWindow(QMainWindow):
         self.items_by_job[job] = items
         for item in items:
             self.items_by_id[item.item_id] = item
+        self._relic_model_cache.clear()
+        self._display_sync_item_cache.clear()
+        self._saved_stats_cache.clear()
         self._raw_stats_cache.clear()
+        current_job = self.job_combo.currentData() if hasattr(self, "job_combo") else self.current_gearset.job
+        if current_job != job:
+            logger.info("Stored stale job result for %s without applying it to current job %s", job, current_job)
+            QTimer.singleShot(0, self._ensure_initial_job_items_loaded)
+            return
         self.cap_table = optimizer.build_cap_table(
             items,
             self.base_params,
@@ -6454,29 +8470,36 @@ class MainWindow(QMainWindow):
             return []
 
         if not self._level_sync_enabled():
-            rows: List[Dict[str, object]] = []
-            for item in sorted_items:
-                rows.append(
-                    {
-                        "item_id": int(item.item_id),
-                        "member_ids": [int(item.item_id)],
-                        "il_text": str(item.ilvl),
-                        "name_text": display_name_with_fallback(getattr(item, "name_ja", None), item.name),
-                        "icon_url": getattr(item, "icon_url", None),
-                        "slots_text": str(item.materia_slots),
-                        "crt": int(item.base_params_hq.get(27, 0)),
-                        "dht": int(item.base_params_hq.get(22, 0)),
-                        "det": int(item.base_params_hq.get(44, 0)),
-                        "speed": int(item.base_params_hq.get(speed_stat, 0)),
-                        "extra": int(item.base_params_hq.get(extra_stat, 0)) if extra_stat else None,
-                    }
-                )
-            return rows
+            return [
+                {
+                    "item_id": int(item.item_id),
+                    "member_ids": [int(item.item_id)],
+                    "il_text": str(item.ilvl),
+                    "name_text": display_name_with_fallback(getattr(item, "name_ja", None), item.name),
+                    "icon_url": getattr(item, "icon_url", None),
+                    "slots_text": str(item.materia_slots),
+                    "crt": int(item.base_params_hq.get(27, 0)),
+                    "dht": int(item.base_params_hq.get(22, 0)),
+                    "det": int(item.base_params_hq.get(44, 0)),
+                    "speed": int(item.base_params_hq.get(speed_stat, 0)),
+                    "extra": int(item.base_params_hq.get(extra_stat, 0)) if extra_stat else None,
+                }
+                for item in sorted_items
+            ]
 
         sync_il = int(self._level_sync_il_value() or 0)
         near_min = max(1, sync_il - 10)
         near_max = sync_il + 10
         forced_high_sync_min_il = SYNC_SUBSTAT_CAP_START_IL.get(sync_il)
+
+        def _synced_display_item(item: ItemRecord) -> ItemRecord:
+            cache_key = (int(item.item_id or 0), str(job or ""), sync_il)
+            cached = self._display_sync_item_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            effective_item, _synced = self._apply_level_sync_to_item(item, job)
+            self._display_sync_item_cache[cache_key] = effective_item
+            return effective_item
 
         def _row_from_item(
             item: ItemRecord,
@@ -6502,13 +8525,13 @@ class MainWindow(QMainWindow):
             }
 
         rows: List[Dict[str, object]] = []
-        high_sync_groups: Dict[Tuple[int, int, int, int, int], Dict[str, object]] = {}
+        high_sync_groups: Dict[Tuple[int, int, int, int, int, str], Dict[str, object]] = {}
         allowed_stats = optimizer.allowed_meld_stats(job)
         cap_stats = set(optimizer.MELDABLE_STATS).intersection(allowed_stats)
 
         for item in sorted_items:
             ilvl = int(item.ilvl or 0)
-            effective_item, _synced = self._apply_level_sync_to_item(item, job)
+            effective_item = _synced_display_item(item)
 
             # Always show near-sync window rows as-is.
             if near_min <= ilvl <= near_max:
@@ -6569,6 +8592,7 @@ class MainWindow(QMainWindow):
                     int(effective_item.base_params_hq.get(44, 0)),
                     int(effective_item.base_params_hq.get(speed_stat, 0)),
                     int(effective_item.base_params_hq.get(extra_stat, 0)) if extra_stat else 0,
+                    self._special_weapon_group_key(item, job),
                 )
                 group = high_sync_groups.get(group_key)
                 if group is None:
@@ -6587,16 +8611,32 @@ class MainWindow(QMainWindow):
         if high_sync_groups:
             high_rows: List[Dict[str, object]] = []
             groups = list(high_sync_groups.values())
-            groups.sort(key=lambda g: (int(g["min_il"]), display_name_with_fallback(getattr(g["rep"], "name_ja", None), g["rep"].name)))
+            groups.sort(
+                key=lambda g: (
+                    -int(g["min_il"]),
+                    display_name_with_fallback(
+                        getattr(g["rep"], "name_ja", None),
+                        g["rep"].name,
+                    ),
+                )
+            )
             for group in groups:
                 rep = group["rep"]
                 effective_rep = group["effective"]
                 member_ids = self._dedupe_item_ids(group["member_ids"])
                 min_il = int(group["min_il"])
+                special_kind = (
+                    "PW"
+                    if self._is_phantom_weapon_item(rep)
+                    else self._special_weapon_kind_text(self._relic_model_for_item(rep, job))
+                )
                 if len(member_ids) <= 1:
                     name_text = display_name_with_fallback(getattr(rep, "name_ja", None), rep.name)
                 else:
-                    name_text = f"IL{min_il}以上の装備 ({len(member_ids)}件)"
+                    if special_kind in {"RW", "MW"}:
+                        name_text = f"IL{min_il}以上{special_kind} ({len(member_ids)}件)"
+                    else:
+                        name_text = f"IL{min_il}以上の装備 ({len(member_ids)}件)"
                 high_rows.append(
                     _row_from_item(
                         rep,
@@ -6649,6 +8689,7 @@ class MainWindow(QMainWindow):
         extra_label = "TEN" if extra_stat == 19 else "PIE" if extra_stat == 6 else "-"
 
         self._populate_queue = []
+        display_rows_by_match_slot: Dict[str, List[Dict[str, object]]] = {}
         visible_item_icon_urls: List[str] = []
         try:
             for slot, table in self.slot_tables.items():
@@ -6660,31 +8701,35 @@ class MainWindow(QMainWindow):
                 row_map: Dict[int, int] = {}
                 table.setColumnCount(8)
                 table.setHorizontalHeaderLabels(["IL", "装備名", "枠", "CRT", "DHT", "DET", speed_label, extra_label])
-                try:
-                    display_rows = self._compress_slot_items_for_display(choices, job, speed_stat, extra_stat)
-                except Exception as ex:
-                    print(f"[ui] display compression failed slot={slot}: {ex}")
-                    display_rows = []
-                    for item in sorted(
-                        choices,
-                        key=lambda i: (-i.ilvl, display_name_with_fallback(getattr(i, "name_ja", None), i.name)),
-                    ):
-                        effective_item, _synced = self._apply_level_sync_to_item(item, job)
-                        display_rows.append(
-                            {
-                                "item_id": int(item.item_id),
-                                "member_ids": [int(item.item_id)],
-                                "il_text": str(item.ilvl),
-                                "name_text": display_name_with_fallback(getattr(item, "name_ja", None), item.name),
-                                "icon_url": getattr(item, "icon_url", None),
-                                "slots_text": str(effective_item.materia_slots),
-                                "crt": int(effective_item.base_params_hq.get(27, 0)),
-                                "dht": int(effective_item.base_params_hq.get(22, 0)),
-                                "det": int(effective_item.base_params_hq.get(44, 0)),
-                                "speed": int(effective_item.base_params_hq.get(speed_stat, 0)),
-                                "extra": int(effective_item.base_params_hq.get(extra_stat, 0)) if extra_stat else None,
-                            }
-                        )
+                if match_slot in display_rows_by_match_slot:
+                    display_rows = display_rows_by_match_slot[match_slot]
+                else:
+                    try:
+                        display_rows = self._compress_slot_items_for_display(choices, job, speed_stat, extra_stat)
+                    except Exception:
+                        logger.exception("Display compression failed for slot %s", slot)
+                        display_rows = []
+                        for item in sorted(
+                            choices,
+                            key=lambda i: (-i.ilvl, display_name_with_fallback(getattr(i, "name_ja", None), i.name)),
+                        ):
+                            effective_item, _synced = self._apply_level_sync_to_item(item, job)
+                            display_rows.append(
+                                {
+                                    "item_id": int(item.item_id),
+                                    "member_ids": [int(item.item_id)],
+                                    "il_text": str(item.ilvl),
+                                    "name_text": display_name_with_fallback(getattr(item, "name_ja", None), item.name),
+                                    "icon_url": getattr(item, "icon_url", None),
+                                    "slots_text": str(effective_item.materia_slots),
+                                    "crt": int(effective_item.base_params_hq.get(27, 0)),
+                                    "dht": int(effective_item.base_params_hq.get(22, 0)),
+                                    "det": int(effective_item.base_params_hq.get(44, 0)),
+                                    "speed": int(effective_item.base_params_hq.get(speed_stat, 0)),
+                                    "extra": int(effective_item.base_params_hq.get(extra_stat, 0)) if extra_stat else None,
+                                }
+                            )
+                    display_rows_by_match_slot[match_slot] = display_rows
                 table.setRowCount(len(display_rows) + 1)
                 if self._icon_display_enabled():
                     for row_data in display_rows:
@@ -6916,22 +8961,27 @@ class MainWindow(QMainWindow):
                 f"この装備は unique のため、{other_label} と重複して設定できません。",
             )
             return False
+        self._clear_optimal_variant_tabs()
         sel = self.current_gearset.items.get(slot) or ItemSelection()
         if int(sel.item_id or 0) == resolved_item_id:
-            table = self.slot_tables.get(slot)
-            if table:
-                self._select_table_row(table, resolved_item_id)
+            self._clear_export_item_override(slot)
+            self._sync_selected_saved_set_ui_context()
             return True
         sel.item_id = resolved_item_id
         sel.materia = []
+        sel.relic_stats = {}
         self.current_gearset.items[slot] = sel
+        self._clear_export_item_override(slot)
         table = self.slot_tables.get(slot)
-        if table:
+        if table is not None:
             self._select_table_row(table, resolved_item_id)
+        self._raw_stats_cache.clear()
         self._refresh_slot_selected_display(slot)
         self._persist_current_gearset_to_selected_saved_set()
+        self._sync_selected_saved_set_ui_context()
+        self._schedule_auto_score_update()
         self.progress_label.setText(
-            f"{SLOT_LABELS.get(slot, slot)} のエクスポート用装備を更新しました。"
+            f"{SLOT_LABELS.get(slot, slot)} の装備を更新しました。"
         )
         return True
 
@@ -6947,7 +8997,6 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(dialog)
         info_label = QLabel(
             f"この行には {len(items)} 件の装備が含まれます。表示中のサブステと枠は、レベルシンク後の共通値です。"
-            " 一覧から選んだ装備がエクスポート時に使われます。"
         )
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
@@ -6961,8 +9010,7 @@ class MainWindow(QMainWindow):
             lambda pos, s=slot, lst=item_list: self._on_grouped_items_context_menu(s, lst, pos)
         )
         excluded_ids = self._slot_excluded_item_id_set(slot)
-        current_sel = (self.current_gearset.items or {}).get(slot) or ItemSelection()
-        current_item_id = int(current_sel.item_id or 0) if current_sel.item_id else 0
+        current_item_id = int(getattr((self.current_gearset.items or {}).get(slot), "item_id", 0) or 0)
         current_row = -1
         for item in items:
             label = f"[IL{int(item.ilvl or 0)}] {display_name_with_fallback(getattr(item, 'name_ja', None), item.name)}"
@@ -7002,6 +9050,77 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         layout.addWidget(buttons)
         dialog.exec()
+
+    def _show_excluded_slot_items_dialog(self, slot: str) -> None:
+        excluded_ids = self._slot_excluded_item_ids(slot)
+        if not excluded_ids:
+            return
+        title = SLOT_LABELS.get(slot, slot)
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"{title} の除外装備一覧")
+        dialog.resize(560, min(680, 180 + len(excluded_ids) * 28))
+
+        layout = QVBoxLayout(dialog)
+        info_label = QLabel(
+            "除外を解除する装備を右クリックしてください。"
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        item_list = QListWidget(dialog)
+        if hasattr(item_list, "setUniformItemSizes"):
+            item_list.setUniformItemSizes(True)
+        item_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        item_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        item_list.customContextMenuRequested.connect(
+            lambda pos, s=slot, lst=item_list: self._on_excluded_items_context_menu(
+                s,
+                lst,
+                pos,
+            )
+        )
+        for item_id in excluded_ids:
+            item = self.items_by_id.get(int(item_id))
+            if item is None:
+                label = f"装備ID {int(item_id)}（装備データ未読込）"
+            else:
+                item_name = display_name_with_fallback(
+                    getattr(item, "name_ja", None),
+                    item.name,
+                )
+                label = f"[IL{int(item.ilvl or 0)}] {item_name}"
+            list_item = QListWidgetItem(label)
+            list_item.setData(Qt.UserRole, int(item_id))
+            item_list.addItem(list_item)
+        if item_list.count() > 0:
+            item_list.setCurrentRow(0)
+        layout.addWidget(item_list)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close, parent=dialog)
+        buttons.rejected.connect(dialog.reject)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+        dialog.exec()
+
+    def _on_excluded_items_context_menu(
+        self,
+        slot: str,
+        item_list: QListWidget,
+        pos,
+    ) -> None:
+        item = item_list.itemAt(pos)
+        if not item:
+            return
+        try:
+            item_id = int(item.data(Qt.UserRole) or 0)
+        except Exception:
+            return
+        if item_id <= 0 or item_id not in self._slot_excluded_item_id_set(slot):
+            return
+        self._toggle_slot_item_exclusion(slot, [item_id], exclude=False)
+        row = item_list.row(item)
+        if row >= 0:
+            item_list.takeItem(row)
 
     def _set_grouped_list_item_excluded_style(self, list_item: QListWidgetItem, excluded: bool) -> None:
         font = list_item.font()
@@ -7120,8 +9239,17 @@ class MainWindow(QMainWindow):
         self._refresh_all_slot_displays()
         self._schedule_auto_score_update()
 
-    def _apply_level_sync_to_item(self, item: ItemRecord, job: Optional[str]) -> Tuple[ItemRecord, bool]:
-        sync_il = self._level_sync_il_value()
+    def _apply_level_sync_to_item(
+        self,
+        item: ItemRecord,
+        job: Optional[str],
+        sync_il_override: object = _USE_CURRENT_SYNC,
+    ) -> Tuple[ItemRecord, bool]:
+        sync_il = (
+            self._level_sync_il_value()
+            if sync_il_override is _USE_CURRENT_SYNC
+            else sync_il_override
+        )
         if not sync_il or not job:
             return item, False
         if not item or int(item.ilvl or 0) <= sync_il:
@@ -7174,7 +9302,11 @@ class MainWindow(QMainWindow):
         )
         return synced_item, True
 
-    def _resolved_selected_items(self, gearset: Gearset) -> Tuple[Dict[str, object], set]:
+    def _resolved_selected_items(
+        self,
+        gearset: Gearset,
+        sync_il_override: object = _USE_CURRENT_SYNC,
+    ) -> Tuple[Dict[str, object], set]:
         selected_items: Dict[str, object] = {}
         no_meld_slots: set = set()
         seen_unique: set = set()
@@ -7189,7 +9321,12 @@ class MainWindow(QMainWindow):
                 continue
             if bool(getattr(item, "unique", False)):
                 seen_unique.add(item_id)
-            effective_item, synced = self._apply_level_sync_to_item(item, gearset.job)
+            effective_item, synced, _relic_config, _relic_stats = self._effective_item_for_selection(
+                item,
+                sel,
+                gearset.job,
+                sync_il_override=sync_il_override,
+            )
             selected_items[slot] = effective_item
             if synced:
                 no_meld_slots.add(slot)
@@ -7268,10 +9405,7 @@ class MainWindow(QMainWindow):
 
     def _resolve_optimize_food_candidates(self) -> Tuple[List[object], Optional[object]]:
         food_id = self.current_gearset.food_id
-        if food_id:
-            resolved_food = self._find_food_by_id(food_id)
-            foods = [resolved_food] if resolved_food and optimizer.is_combat_food(resolved_food) else []
-        else:
+        if bool(getattr(self.current_gearset, "food_simulation", False)):
             il_min = self.food_il_min.value()
             il_max = self.food_il_max.value()
 
@@ -7280,8 +9414,24 @@ class MainWindow(QMainWindow):
                     return True
                 return il_min <= food.level_item <= il_max
 
-            foods = [f for f in self.foods if in_range(f) and optimizer.is_combat_food(f)]
+            foods = optimizer.highest_item_level_combat_foods(
+                [f for f in self.foods if in_range(f)]
+            )
+            relevant_stats = set(optimizer.allowed_meld_stats(self.current_gearset.job or ""))
+            main_stat_id = optimizer.MAIN_STAT_BY_JOB.get(self.current_gearset.job or "")
+            if main_stat_id is not None:
+                relevant_stats.add(main_stat_id)
+            relevant_stats.add(3)  # VIT/HPも同一以上の食事だけを優越候補とする
+            foods = optimizer.non_dominated_combat_foods(
+                foods,
+                relevant_stats,
+            )
             foods.sort(key=lambda f: (-(f.level_item or 0), f.food_id or 0))
+        elif food_id:
+            resolved_food = self._find_food_by_id(food_id)
+            foods = [resolved_food] if resolved_food and optimizer.is_combat_food(resolved_food) else []
+        else:
+            foods = [None]
         food_for_baseline = self._find_food_by_id(food_id)
         return foods, food_for_baseline
 
@@ -7380,6 +9530,63 @@ class MainWindow(QMainWindow):
             except Exception:
                 continue
 
+        relic_profile_cache: Dict[int, Tuple[Dict[int, int], Dict[int, int]]] = {}
+
+        def resistance_effective_profile(
+            raw_item: ItemRecord,
+            relic_config: Optional[Dict[str, object]],
+        ) -> Tuple[Dict[int, int], Dict[int, int]]:
+            item_id = int(raw_item.item_id)
+            cached = relic_profile_cache.get(item_id)
+            if cached is not None:
+                return cached
+            if str((relic_config or {}).get("kind") or "") != "resistance":
+                relic_profile_cache[item_id] = ({}, {})
+                return relic_profile_cache[item_id]
+            base_effective, _synced, _config, _stats = self._effective_item_for_selection(
+                raw_item,
+                None,
+                job,
+            )
+            base_stats = dict(base_effective.base_params_hq or {})
+            effective_caps: Dict[int, int] = {}
+            total_cap = int((relic_config or {}).get("total_cap", 0) or 0)
+            stat_caps = dict((relic_config or {}).get("stat_caps", {}) or {})
+            for stat_id in list((relic_config or {}).get("allowed_stats", []) or []):
+                stat_id = int(stat_id)
+                requested = min(total_cap, int(stat_caps.get(stat_id, 0) or 0))
+                if requested <= 0:
+                    continue
+                capped_effective, _synced, _config, _stats = self._effective_item_for_selection(
+                    raw_item,
+                    ItemSelection(item_id=item_id, relic_stats={stat_id: requested}),
+                    job,
+                )
+                effective_caps[stat_id] = max(
+                    0,
+                    int(capped_effective.base_params_hq.get(stat_id, 0) or 0)
+                    - int(base_stats.get(stat_id, 0) or 0),
+                )
+            relic_profile_cache[item_id] = (base_stats, effective_caps)
+            return relic_profile_cache[item_id]
+
+        def mark_relic_candidate(
+            effective_item: ItemRecord,
+            raw_item: ItemRecord,
+            relic_config: Optional[Dict[str, object]],
+            relic_stats: Dict[int, int],
+        ) -> None:
+            if relic_stats:
+                setattr(effective_item, "_gear_search_relic_stats", dict(relic_stats))
+            kind = str((relic_config or {}).get("kind") or "")
+            if kind != "resistance":
+                return
+            base_stats, effective_caps = resistance_effective_profile(raw_item, relic_config)
+            setattr(effective_item, "_gear_search_relic_kind", kind)
+            setattr(effective_item, "_gear_search_relic_config", copy.deepcopy(relic_config))
+            setattr(effective_item, "_gear_search_relic_base_stats", dict(base_stats))
+            setattr(effective_item, "_gear_search_relic_effective_caps", dict(effective_caps))
+
         slot_sources = [
             ("weapon", "weapon"),
             ("offhand", "offhand"),
@@ -7405,7 +9612,17 @@ class MainWindow(QMainWindow):
                 if locked_item is None:
                     candidates[slot] = []
                     continue
-                effective_item, _synced = self._apply_level_sync_to_item(locked_item, job)
+                effective_item, _synced, relic_config, relic_stats = self._effective_item_for_selection(
+                    locked_item,
+                    current_sel,
+                    job,
+                )
+                mark_relic_candidate(
+                    effective_item,
+                    locked_item,
+                    relic_config,
+                    relic_stats,
+                )
                 candidates[slot] = [effective_item]
                 continue
             choices = filtered.get(source, [])
@@ -7419,6 +9636,25 @@ class MainWindow(QMainWindow):
                     }
                     for item in choices
                 ]
+            displayed_ids = {
+                int(member_id)
+                for row_data in display_rows
+                for member_id in row_data.get("member_ids", [])
+                if int(member_id or 0) > 0
+            }
+            for item in choices:
+                item_id = int(getattr(item, "item_id", 0) or 0)
+                if item_id <= 0 or item_id in displayed_ids:
+                    continue
+                if not self._is_search_special_weapon_item(item, job):
+                    continue
+                display_rows.append(
+                    {
+                        "item_id": item_id,
+                        "member_ids": [item_id],
+                    }
+                )
+                displayed_ids.add(item_id)
             best_by_signature: Dict[Tuple[object, ...], ItemRecord] = {}
             seen_ids: set = set()
             for row_data in display_rows:
@@ -7435,15 +9671,49 @@ class MainWindow(QMainWindow):
                     raw_item = self.items_by_id.get(item_id)
                     if not raw_item:
                         continue
-                    effective_item, _synced = self._apply_level_sync_to_item(raw_item, job)
-                    signature = self._gear_search_item_signature(effective_item)
-                    current_best = best_by_signature.get(signature)
-                    if current_best is None or self._prefer_gear_search_candidate(
-                        effective_item,
-                        current_best,
-                        preferred_ids,
-                    ):
-                        best_by_signature[signature] = effective_item
+                    selection_override = current_sel if int(getattr(current_sel, "item_id", 0) or 0) == item_id else None
+                    selection_variants: List[Optional[ItemSelection]] = [selection_override]
+                    relic_config = self._relic_model_for_item(raw_item, job)
+                    for relic_stats in self._gear_search_relic_stat_variants(relic_config):
+                        selection_variants.append(
+                            ItemSelection(
+                                item_id=item_id,
+                                relic_stats=relic_stats,
+                            )
+                        )
+                    seen_relic_variants: set[Tuple[Tuple[int, int], ...]] = set()
+                    for selection_variant in selection_variants:
+                        relic_variant_key = tuple(
+                            sorted(
+                                (int(stat_id), int(value))
+                                for stat_id, value in (
+                                    getattr(selection_variant, "relic_stats", {}) or {}
+                                ).items()
+                                if int(value or 0) > 0
+                            )
+                        )
+                        if relic_variant_key in seen_relic_variants:
+                            continue
+                        seen_relic_variants.add(relic_variant_key)
+                        effective_item, _synced, _relic_config, relic_stats = self._effective_item_for_selection(
+                            raw_item,
+                            selection_variant,
+                            job,
+                        )
+                        mark_relic_candidate(
+                            effective_item,
+                            raw_item,
+                            _relic_config,
+                            relic_stats,
+                        )
+                        signature = self._gear_search_item_signature(effective_item)
+                        current_best = best_by_signature.get(signature)
+                        if current_best is None or self._prefer_gear_search_candidate(
+                            effective_item,
+                            current_best,
+                            preferred_ids,
+                        ):
+                            best_by_signature[signature] = effective_item
                     seen_ids.add(item_id)
             slot_candidates = list(best_by_signature.values())
             slot_candidates.sort(
@@ -7489,6 +9759,9 @@ class MainWindow(QMainWindow):
         current_target_gcd = self.current_gearset.target_gcd
         current_race = self.current_gearset.race
         current_food_id = self.current_gearset.food_id
+        current_food_simulation = bool(
+            getattr(self.current_gearset, "food_simulation", False)
+        )
         active_items = self.current_gearset.items or {}
 
         def add_seed(gear: Optional[Gearset]) -> None:
@@ -7500,6 +9773,7 @@ class MainWindow(QMainWindow):
             cloned.target_gcd = current_target_gcd
             cloned.race = current_race
             cloned.food_id = current_food_id
+            cloned.food_simulation = current_food_simulation
             for slot in GEAR_SLOTS:
                 active_sel = active_items.get(slot) or ItemSelection()
                 target_sel = (cloned.items or {}).get(slot) or ItemSelection()
@@ -7509,6 +9783,7 @@ class MainWindow(QMainWindow):
                 if target_sel.lock_item:
                     previous_item_id = target_sel.item_id
                     target_sel.item_id = active_sel.item_id
+                    target_sel.relic_stats = dict(self._selection_relic_stats(active_sel))
                     if target_sel.lock_materia:
                         target_sel.materia = list(active_sel.materia or [])
                     elif previous_item_id != active_sel.item_id:
@@ -7526,6 +9801,13 @@ class MainWindow(QMainWindow):
                     slot,
                     sel.item_id if sel else None,
                     tuple((m.base_param, m.grade) for m in ((sel.materia or []) if sel else [])),
+                    tuple(
+                        sorted(
+                            (int(stat_id), int(value))
+                            for stat_id, value in self._selection_relic_stats(sel).items()
+                            if int(value or 0) > 0
+                        )
+                    ) if sel else (),
                 )
                 for slot, sel in sorted((cloned.items or {}).items())
             )
@@ -7554,6 +9836,8 @@ class MainWindow(QMainWindow):
         candidate_items_by_slot: Dict[str, List[ItemRecord]],
         gear: Gearset,
         fixed_slots: set[str],
+        sync_il_override: object = _USE_CURRENT_SYNC,
+        allow_ui_fallback: bool = True,
     ) -> Tuple[Dict[str, List[ItemRecord]], List[str]]:
         constrained: Dict[str, List[ItemRecord]] = {}
         missing: List[str] = []
@@ -7564,12 +9848,59 @@ class MainWindow(QMainWindow):
                     missing.append(slot)
                     constrained[slot] = []
                     continue
+                slot_candidates = list(candidate_items_by_slot.get(slot) or [])
+                selected_relic_key = tuple(
+                    sorted(
+                        (int(stat_id), int(value))
+                        for stat_id, value in self._selection_relic_stats(sel).items()
+                        if int(value or 0) > 0
+                    )
+                )
+                same_id_candidates = [
+                    candidate
+                    for candidate in slot_candidates
+                    if int(getattr(candidate, "item_id", 0) or 0) == int(sel.item_id)
+                ]
+                item = next(
+                    (
+                        candidate
+                        for candidate in same_id_candidates
+                        if tuple(
+                            sorted(
+                                (int(stat_id), int(value))
+                                for stat_id, value in dict(
+                                    getattr(candidate, "_gear_search_relic_stats", {}) or {}
+                                ).items()
+                                if int(value or 0) > 0
+                            )
+                        ) == selected_relic_key
+                    ),
+                    None,
+                )
+                if item is None and same_id_candidates and all(
+                    not getattr(candidate, "_gear_search_relic_kind", "")
+                    and not getattr(candidate, "_gear_search_relic_stats", {})
+                    for candidate in same_id_candidates
+                ):
+                    item = same_id_candidates[0]
+                if item is not None:
+                    constrained[slot] = [item]
+                    continue
+                if not allow_ui_fallback:
+                    missing.append(slot)
+                    constrained[slot] = []
+                    continue
                 item = self.items_by_id.get(int(sel.item_id))
                 if item is None:
                     missing.append(slot)
                     constrained[slot] = []
                     continue
-                effective_item, _synced = self._apply_level_sync_to_item(item, gear.job)
+                effective_item, _synced, _relic_config, _relic_stats = self._effective_item_for_selection(
+                    item,
+                    sel,
+                    gear.job,
+                    sync_il_override=sync_il_override,
+                )
                 constrained[slot] = [effective_item]
             else:
                 constrained[slot] = list(candidate_items_by_slot.get(slot) or [])
@@ -7588,6 +9919,13 @@ class MainWindow(QMainWindow):
                     slot,
                     sel.item_id if sel else None,
                     tuple((m.base_param, m.grade) for m in ((sel.materia or []) if sel else [])),
+                    tuple(
+                        sorted(
+                            (int(stat_id), int(value))
+                            for stat_id, value in self._selection_relic_stats(sel).items()
+                            if int(value or 0) > 0
+                        )
+                    ) if sel else (),
                 )
                 for slot, sel in sorted((gs.items or {}).items())
             )
@@ -7599,13 +9937,55 @@ class MainWindow(QMainWindow):
                 break
         return deduped
 
+    @staticmethod
+    def _gear_search_focus_signature(gear: Gearset) -> Tuple:
+        """Return the conditions that can change a fixed-side gear search."""
+
+        signature = []
+        for slot in GEAR_SLOTS:
+            selection = (gear.items or {}).get(slot)
+            if selection is None:
+                signature.append((slot, None, (), False, False, ()))
+                continue
+            lock_item = bool(getattr(selection, "lock_item", False))
+            lock_materia = bool(getattr(selection, "lock_materia", False))
+            relic_stats = tuple(
+                sorted(
+                    (int(stat_id), int(value))
+                    for stat_id, value in dict(
+                        getattr(selection, "relic_stats", {}) or {}
+                    ).items()
+                    if int(value or 0) > 0
+                )
+            )
+            fixed_materia = (
+                tuple(
+                    (int(meld.base_param), int(meld.grade))
+                    for meld in (selection.materia or [])
+                )
+                if lock_item and lock_materia
+                else ()
+            )
+            signature.append(
+                (
+                    slot,
+                    int(selection.item_id) if selection.item_id else None,
+                    relic_stats,
+                    lock_item,
+                    lock_materia,
+                    fixed_materia,
+                )
+            )
+        return tuple(signature)
+
     def refresh_food_combo(self) -> None:
         il_min = self.food_il_min.value()
         il_max = self.food_il_max.value()
         current_food_id = self.food_combo.currentData()
         self.food_combo.blockSignals(True)
         self.food_combo.clear()
-        self.food_combo.addItem("食事なし", None)
+        self.food_combo.addItem("食事なし（固定）", None)
+        self.food_combo.addItem("食事をシミュレーション", FOOD_SIMULATION_DATA)
 
         def in_range(f):
             if f.level_item is None:
@@ -7618,11 +9998,27 @@ class MainWindow(QMainWindow):
             name = display_name_with_fallback(getattr(f, "name_ja", None), f.name)
             level = f.level_item if f.level_item is not None else "?"
             self.food_combo.addItem(f"[IL{level}] {name}", f.food_id)
-        if current_food_id:
+        if current_food_id is not None:
             idx = self.food_combo.findData(current_food_id)
             if idx != -1:
                 self.food_combo.setCurrentIndex(idx)
         self.food_combo.blockSignals(False)
+
+    def _sync_food_selection_to_gearset(self) -> Optional[int]:
+        selected = self.food_combo.currentData()
+        simulate = selected == FOOD_SIMULATION_DATA
+        self.current_gearset.food_simulation = simulate
+        if not simulate:
+            self.current_gearset.food_id = self._resolve_food_id(selected)
+        return self.current_gearset.food_id
+
+    def _on_food_combo_changed(self, _index: int = -1) -> None:
+        if getattr(self, "_applying_gearset", False):
+            return
+        self._sync_food_selection_to_gearset()
+        self._update_optimize_button_text()
+        self._schedule_auto_score_update()
+        self._sync_selected_saved_set_ui_context()
 
     def _ensure_food_combo_item(self, food_id: Optional[int]) -> None:
         if food_id is None or not hasattr(self, "food_combo"):
@@ -7671,9 +10067,10 @@ class MainWindow(QMainWindow):
                 sel.item_id = item_id
                 if item_id is None:
                     sel.materia = []
+                    sel.relic_stats = {}
             self.current_gearset.items[slot] = sel
         self.current_gearset.target_gcd = self.input_target_gcd.value()
-        self.current_gearset.food_id = self.food_combo.currentData()
+        self._sync_food_selection_to_gearset()
         self.current_gearset.race = self._current_race()
         self.current_gearset.level = self._effective_calc_level()
 
@@ -7682,7 +10079,14 @@ class MainWindow(QMainWindow):
         for slot_name in GEAR_SLOTS:
             sel = (gearset.items or {}).get(slot_name) or ItemSelection()
             mats = tuple((m.base_param, m.grade) for m in (sel.materia or []))
-            key_slots.append((slot_name, int(sel.item_id or 0), mats))
+            relic_sig = tuple(
+                sorted(
+                    (int(stat_id), int(value))
+                    for stat_id, value in self._selection_relic_stats(sel).items()
+                    if int(value or 0) > 0
+                )
+            )
+            key_slots.append((slot_name, int(sel.item_id or 0), mats, relic_sig))
         cache_key = (
             str(gearset.job or ""),
             int(gearset.level or 0),
@@ -7722,11 +10126,6 @@ class MainWindow(QMainWindow):
         self._raw_stats_cache[cache_key] = (dict(combined_stats), dict(selected_items))
         return combined_stats, selected_items
 
-    def _compute_stats_with_materia_and_food(self, gearset: Gearset, food) -> Tuple[Dict[int, int], Dict[str, object]]:
-        raw_stats, selected_items = self._compute_raw_stats_with_melds(gearset)
-        total_stats = optimizer.apply_food(raw_stats, food)
-        return total_stats, selected_items
-
     def _selected_saved_set_locked(self) -> bool:
         if not hasattr(self, "saved_sets_table"):
             return False
@@ -7739,62 +10138,6 @@ class MainWindow(QMainWindow):
 
     def _show_locked_materia_message(self) -> None:
         QMessageBox.information(self, "ロック中", "ロック中のためマテリア更新できません。")
-
-    def on_edit_materia(self, slot: str) -> None:
-        if self._selected_saved_set_locked():
-            self._show_locked_materia_message()
-            return
-        sel = self.current_gearset.items.get(slot)
-        if not sel or not sel.item_id:
-            QMessageBox.warning(self, "未選択", "先に装備を選択してください。")
-            return
-        item = self.items_by_id.get(sel.item_id)
-        if not item:
-            QMessageBox.warning(self, "不明", "装備データが見つかりません。")
-            return
-        effective_item, synced = self._apply_level_sync_to_item(item, self.current_gearset.job)
-        if optimizer.total_meld_slots_for_item(effective_item) <= 0:
-            if synced:
-                QMessageBox.information(self, "マテリア無効", "レベルシンク中の装備にはマテリアを装着できません。")
-                return
-            QMessageBox.information(self, "スロットなし", "この装備にはマテリアスロットがありません。")
-            return
-        dialog = MateriaEditorDialog(
-            self,
-            item=effective_item,
-            materia_catalog=self.materia_catalog,
-            cap_table=self.cap_table,
-            selections=sel.materia,
-            job=self.current_gearset.job,
-        )
-        if dialog.exec() == QDialog.Accepted:
-            self._clear_optimal_variant_tabs()
-            sel.materia = dialog.result
-            self.current_gearset.items[slot] = sel
-            self._refresh_slot_selected_display(slot)
-            self._schedule_auto_score_update()
-
-    def on_save_gearset(self) -> None:
-        self.current_gearset.target_gcd = self.input_target_gcd.value()
-        self.current_gearset.level = self._effective_calc_level()
-        self.current_gearset.note = self.note_edit.toPlainText()
-        path, _ = QFileDialog.getSaveFileName(self, "装備セットを保存", str(Path.cwd() / "gearset.json"), "JSON Files (*.json)")
-        if not path:
-            return
-        data = self.current_gearset.to_dict()
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        QMessageBox.information(self, "保存完了", f"{path} に保存しました。")
-
-    def on_load_gearset(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "装備セットを読み込む", str(Path.cwd()), "JSON Files (*.json)")
-        if not path:
-            return
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        gear = Gearset.from_dict(data)
-        self._apply_gearset_to_ui(gear)
-        QMessageBox.information(self, "読込完了", f"{path} から読み込みました。")
 
     def on_optimize(self) -> None:
         if self._selected_saved_set_locked():
@@ -7877,6 +10220,23 @@ class MainWindow(QMainWindow):
                 pass
 
         self.last_optimize_mode = mode
+        gearset_snapshot = Gearset.from_dict(self.current_gearset.to_dict())
+        items_by_id_snapshot = dict(self.items_by_id)
+        materia_catalog_snapshot = dict(self.materia_catalog)
+        foods_snapshot = list(foods)
+        casts_snapshot = copy.deepcopy(self.casts)
+        cap_table_snapshot = dict(self.cap_table)
+        damage_summary_snapshot = copy.deepcopy(
+            self.damage_summary_self if mode == "simdps_self" else self.damage_summary
+        )
+        gcd_constraint_snapshot = self._active_log_gcd_constraint(mode)
+        job_mods_snapshot = self._get_job_mods(job)
+        party_bonus_snapshot = int(self.party_bonus.value())
+        level_sync_ilvl_snapshot = self._level_sync_il_value()
+        optimization_worker_count_snapshot = self._optimization_worker_count()
+        baseline_raw_stats = dict(baseline_raw_stats or {})
+        baseline_items = dict(baseline_items or {})
+        party_synergies = dict(party_synergies or {})
         if self._gear_search_enabled():
             gear_candidates, missing_slots = self._build_gear_search_candidates(job)
             if missing_slots:
@@ -7889,79 +10249,208 @@ class MainWindow(QMainWindow):
                 return
             self._last_optimize_used_gear_search = True
             seed_candidates = self._gear_search_seed_candidates(job, gear_candidates)
+            gear_candidates_snapshot = {
+                slot: list(items)
+                for slot, items in gear_candidates.items()
+            }
+            seed_candidates_snapshot = [
+                (
+                    Gearset.from_dict(seed_gearset.to_dict()),
+                    dict(seed_items),
+                    set(seed_no_meld),
+                )
+                for seed_gearset, seed_items, seed_no_meld in seed_candidates
+            ]
 
-            def task(progress=None, stop_event=None):
+            def _run_gear_search_task(
+                optimization_session,
+                progress=None,
+                stop_event=None,
+            ):
                 def _search_progress(pct: int, message: str) -> None:
                     if not progress:
                         return
-                    mapped = int((max(0, min(100, int(pct))) / 100.0) * 87)
+                    mapped = int((max(0, min(100, int(pct))) / 100.0) * 80)
                     progress(mapped, message)
 
                 results = optimizer.search_gearsets(
-                    self.current_gearset,
-                    gear_candidates,
-                    self.items_by_id,
-                    self.materia_catalog,
-                    foods,
-                    self.casts,
+                    gearset_snapshot,
+                    gear_candidates_snapshot,
+                    items_by_id_snapshot,
+                    materia_catalog_snapshot,
+                    foods_snapshot,
+                    casts_snapshot,
                     fight_ms_eval,
-                    self.cap_table,
-                    damage_summary=self.damage_summary_self if mode == "simdps_self" else self.damage_summary,
-                    job_mods=self._get_job_mods(job),
-                    party_bonus=self.party_bonus.value(),
+                    cap_table_snapshot,
+                    damage_summary=damage_summary_snapshot,
+                    job_mods=job_mods_snapshot,
+                    party_bonus=party_bonus_snapshot,
                     baseline_raw_stats=baseline_raw_stats,
                     baseline_items=baseline_items,
                     baseline_food=baseline_food,
+                    gcd_constraint=gcd_constraint_snapshot,
                     baseline_party_bonus=baseline_party,
                     baseline_race=baseline_race,
                     party_synergies=party_synergies,
                     **eval_rate_adjust_kwargs,
                     mode=mode,
+                    level_sync_ilvl=level_sync_ilvl_snapshot,
                     progress=_search_progress,
                     stop_event=stop_event,
                     finalize_progress=False,
+                    optimization_session=optimization_session,
                 )
                 merged = list(results or [])
+
+                seed_requests = []
+                for seed_index, (
+                    seed_gearset,
+                    seed_items,
+                    seed_no_meld,
+                ) in enumerate(seed_candidates_snapshot):
+                    cache_key = optimizer.optimization_request_key(
+                        seed_gearset,
+                        seed_items,
+                        seed_no_meld,
+                    )
+                    seed_requests.append(
+                        optimizer.OptimizationRequest(
+                            request_id=seed_index,
+                            cache_key=cache_key,
+                            gearset=seed_gearset,
+                            selected_items=seed_items,
+                            no_meld_slots=seed_no_meld,
+                        )
+                    )
+
+                def _seed_progress(
+                    completed: int,
+                    total: int,
+                    elapsed: float,
+                    eta: Optional[float],
+                ) -> None:
+                    if not progress:
+                        return
+                    detail_pct = 100 if total <= 0 else int(
+                        (completed / max(1, total)) * 100
+                    )
+                    eta_text = ""
+                    if eta is not None:
+                        eta_text = f"、残り約{max(0, int(round(eta)))}秒"
+                    progress(
+                        80 + int(detail_pct * 5 / 100),
+                        encode_progress_message(
+                            (
+                                f"既知装備を再評価中 {completed}/{total} "
+                                f"({optimization_session.worker_count}並列、"
+                                f"経過{int(elapsed)}秒{eta_text})"
+                            ),
+                            detail_value=detail_pct,
+                            detail_message="既知装備再評価",
+                        ),
+                    )
+
+                seed_results = optimization_session.optimize_batch(
+                    seed_requests,
+                    stop_event=stop_event,
+                    progress=_seed_progress,
+                )
+                if stop_event and stop_event.is_set():
+                    return []
+                for request in seed_requests:
+                    seed_variants = list(
+                        optimization_session.cached_variants(request.cache_key)
+                    )
+                    if seed_variants:
+                        merged.extend(
+                            self._top_tied_optimized_results(seed_variants, mode)
+                        )
+                        continue
+                    seed_best = seed_results.get(request.cache_key)
+                    if seed_best is not None:
+                        merged.append(seed_best)
+
                 focus_slot_groups = [
                     {"weapon", "offhand", "head", "body", "hands", "legs", "feet"},
                     {"earrings", "necklace", "bracelet", "ring1", "ring2"},
                 ]
-                focused_seeds = list(merged[:2])
+                focused_seeds = []
+                focused_signatures = set()
+                for entry in sorted(
+                    merged,
+                    key=lambda result: (-float(result[1]), float(result[2])),
+                ):
+                    focus_signature = self._gear_search_focus_signature(entry[0])
+                    if focus_signature in focused_signatures:
+                        continue
+                    focused_signatures.add(focus_signature)
+                    focused_seeds.append(entry)
+                    if len(focused_seeds) >= 2:
+                        break
                 for base_index, (focused_gear, _focused_score, _focused_gcd) in enumerate(focused_seeds, 1):
                     refined_gear = focused_gear
                     for focus_index, fixed_slots in enumerate(focus_slot_groups, 1):
                         if stop_event and stop_event.is_set():
                             return []
                         constrained_candidates, missing_focus = self._gear_search_constrained_candidates(
-                            gear_candidates,
+                            gear_candidates_snapshot,
                             refined_gear,
                             fixed_slots,
+                            sync_il_override=level_sync_ilvl_snapshot,
+                            allow_ui_fallback=False,
                         )
                         if missing_focus:
                             continue
+                        focused_search_number = (
+                            (base_index - 1) * len(focus_slot_groups) + focus_index
+                        )
+                        focused_search_total = max(
+                            1,
+                            len(focused_seeds) * len(focus_slot_groups),
+                        )
+
+                        def _focused_progress(
+                            pct: int,
+                            message: str,
+                            *,
+                            search_number: int = focused_search_number,
+                        ) -> None:
+                            if not progress:
+                                return
+                            search_fraction = (
+                                (search_number - 1) + max(0, min(100, int(pct))) / 100.0
+                            ) / focused_search_total
+                            progress(
+                                85 + int(search_fraction * 14),
+                                message,
+                            )
+
                         focused_results = optimizer.search_gearsets(
                             refined_gear,
                             constrained_candidates,
-                            self.items_by_id,
-                            self.materia_catalog,
-                            foods,
-                            self.casts,
+                            items_by_id_snapshot,
+                            materia_catalog_snapshot,
+                            foods_snapshot,
+                            casts_snapshot,
                             fight_ms_eval,
-                            self.cap_table,
-                            damage_summary=self.damage_summary_self if mode == "simdps_self" else self.damage_summary,
-                            job_mods=self._get_job_mods(job),
-                            party_bonus=self.party_bonus.value(),
+                            cap_table_snapshot,
+                            damage_summary=damage_summary_snapshot,
+                            job_mods=job_mods_snapshot,
+                            party_bonus=party_bonus_snapshot,
                             baseline_raw_stats=baseline_raw_stats,
                             baseline_items=baseline_items,
                             baseline_food=baseline_food,
+                            gcd_constraint=gcd_constraint_snapshot,
                             baseline_party_bonus=baseline_party,
                             baseline_race=baseline_race,
                             party_synergies=party_synergies,
                             **eval_rate_adjust_kwargs,
                             mode=mode,
-                            progress=None,
+                            level_sync_ilvl=level_sync_ilvl_snapshot,
+                            progress=_focused_progress,
                             stop_event=stop_event,
                             finalize_progress=False,
+                            optimization_session=optimization_session,
                         )
                         if not focused_results:
                             continue
@@ -7969,65 +10458,104 @@ class MainWindow(QMainWindow):
                         refined_gear = focused_results[0][0]
                         if progress:
                             progress(
-                                88 + min(6, base_index + focus_index),
-                                f"片側固定の再探索中 {base_index}-{focus_index}",
+                                85 + int(
+                                    (focused_search_number / focused_search_total) * 14
+                                ),
+                                encode_progress_message(
+                                    f"片側固定の再探索中 {base_index}-{focus_index}",
+                                    detail_value=int(
+                                        (focused_search_number / focused_search_total) * 100
+                                    ),
+                                    detail_message="片側固定再探索",
+                                ),
                             )
-                for idx, (seed_gearset, seed_items, seed_no_meld) in enumerate(seed_candidates):
-                    if stop_event and stop_event.is_set():
-                        return []
-                    seed_results = optimizer.optimize(
-                        seed_gearset,
-                        self.items_by_id,
-                        self.materia_catalog,
-                        foods,
-                        self.casts,
-                        fight_ms_eval,
-                        self.cap_table,
-                        damage_summary=self.damage_summary_self if mode == "simdps_self" else self.damage_summary,
-                        job_mods=self._get_job_mods(job),
-                        party_bonus=self.party_bonus.value(),
-                        baseline_raw_stats=baseline_raw_stats,
-                        baseline_items=baseline_items,
-                        baseline_food=baseline_food,
-                        baseline_party_bonus=baseline_party,
-                        baseline_race=baseline_race,
-                        party_synergies=party_synergies,
-                        **eval_rate_adjust_kwargs,
-                        selected_items_override=seed_items,
-                        no_meld_slots=seed_no_meld,
-                        mode=mode,
-                        progress=None,
-                        stop_event=stop_event,
-                    )
-                    if seed_results:
-                        merged.extend(self._top_tied_optimized_results(seed_results, mode))
-                        if progress:
-                            progress(95 + min(4, idx), f"既知装備を再評価中 {idx + 1}/{len(seed_candidates)}")
                 if progress:
-                    progress(100, "装備検索を含む最適化が完了しました")
+                    progress(
+                        100,
+                        encode_progress_message(
+                            "装備検索を含む最適化が完了しました",
+                            detail_value=100,
+                            detail_message="完了",
+                        ),
+                    )
                 return self._dedupe_optimized_results(merged, limit=8)
 
-            self.start_worker(task, self._after_optimize)
+            def task(progress=None, stop_event=None):
+                worker_count = optimization_worker_count_snapshot
+                if progress:
+                    progress(
+                        0,
+                        encode_progress_message(
+                            f"最適化ワーカーを起動中（{worker_count}並列）",
+                            detail_value=0,
+                            detail_message="並列処理準備",
+                        ),
+                    )
+                worker_context = optimizer.OptimizationWorkerContext(
+                    items_by_id=items_by_id_snapshot,
+                    materia_catalog=materia_catalog_snapshot,
+                    foods=foods_snapshot,
+                    casts=casts_snapshot,
+                    fight_duration_ms=fight_ms_eval,
+                    cap_table=cap_table_snapshot,
+                    damage_summary=damage_summary_snapshot,
+                    baseline_raw_stats=baseline_raw_stats,
+                    baseline_items=baseline_items,
+                    baseline_gcd=None,
+                    gcd_constraint=gcd_constraint_snapshot,
+                    job_mods=job_mods_snapshot,
+                    baseline_food=baseline_food,
+                    party_bonus=party_bonus_snapshot,
+                    baseline_party_bonus=baseline_party,
+                    mode=mode,
+                    baseline_race=baseline_race,
+                    party_synergies=party_synergies,
+                    crit_rate_offset=float(eval_rate_adjust_kwargs.get("crit_rate_offset", 0.0)),
+                    dhit_rate_offset=float(eval_rate_adjust_kwargs.get("dhit_rate_offset", 0.0)),
+                )
+                with optimizer.OptimizationSession(
+                    worker_context,
+                    worker_count=worker_count,
+                ) as optimization_session:
+                    return _run_gear_search_task(
+                        optimization_session,
+                        progress=progress,
+                        stop_event=stop_event,
+                    )
+
+            if self.start_worker(task, self._after_optimize):
+                self.update_progress(
+                    0,
+                    encode_progress_message(
+                        "装備検索を開始しています...",
+                        detail_value=0,
+                        detail_message="開始準備",
+                    ),
+                )
             return
 
         self._last_optimize_used_gear_search = False
-        selected_items_for_opt, no_meld_slots_opt = self._resolved_selected_items(self.current_gearset)
+        selected_items_for_opt, no_meld_slots_opt = self._resolved_selected_items(
+            gearset_snapshot,
+            sync_il_override=level_sync_ilvl_snapshot,
+        )
 
         def task(progress=None, stop_event=None):
-            results = optimizer.optimize(
-                self.current_gearset,
-                self.items_by_id,
-                self.materia_catalog,
-                foods,
-                self.casts,
+            return optimizer.optimize(
+                gearset_snapshot,
+                items_by_id_snapshot,
+                materia_catalog_snapshot,
+                foods_snapshot,
+                casts_snapshot,
                 fight_ms_eval,
-                self.cap_table,
-                damage_summary=self.damage_summary_self if mode == "simdps_self" else self.damage_summary,
-                job_mods=self._get_job_mods(job),
-                party_bonus=self.party_bonus.value(),
+                cap_table_snapshot,
+                damage_summary=damage_summary_snapshot,
+                job_mods=job_mods_snapshot,
+                party_bonus=party_bonus_snapshot,
                 baseline_raw_stats=baseline_raw_stats,
                 baseline_items=baseline_items,
                 baseline_food=baseline_food,
+                gcd_constraint=gcd_constraint_snapshot,
                 baseline_party_bonus=baseline_party,
                 baseline_race=baseline_race,
                 party_synergies=party_synergies,
@@ -8038,9 +10566,16 @@ class MainWindow(QMainWindow):
                 progress=progress,
                 stop_event=stop_event,
             )
-            return results
 
-        self.start_worker(task, self._after_optimize)
+        if self.start_worker(task, self._after_optimize):
+            self.update_progress(
+                0,
+                encode_progress_message(
+                    "マテリア最適化を開始しています...",
+                    detail_value=0,
+                    detail_message="開始準備",
+                ),
+            )
 
     def on_calculate(self) -> None:
         job = self.current_gearset.job
@@ -8101,6 +10636,17 @@ class MainWindow(QMainWindow):
             **self._eval_rate_adjust_kwargs(),
         }
 
+        selected_entry = next(
+            (
+                entry
+                for entry in self.saved_sets
+                if isinstance(entry, dict)
+                and entry.get("id") == self._current_loaded_saved_set_id
+            ),
+            None,
+        )
+        self._begin_saved_score_recalculation(selected_entry)
+
         if mode == "dmg100p":
             score, expected_score, gcd = optimizer.evaluate_score_pair(
                 raw_stats,
@@ -8150,17 +10696,19 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "結果なし", f"条件を満たす組み合わせが見つかりませんでした。{detail}")
             return
         mode = self.last_optimize_mode or "simdps_self"
-        best = results[0][0]
+        variant_entries = self._build_optimal_variant_entries(list(results), mode)
+        active_entry = variant_entries[0] if variant_entries else None
+        best = active_entry.get("gearset") if active_entry is not None else results[0][0]
+        if not isinstance(best, Gearset):
+            best = results[0][0]
         self._pending_saved_set_ui_context = self._capture_saved_set_ui_context(best.job)
         self._apply_gearset_to_ui(best)
-        variant_entries = self._build_optimal_variant_entries(list(results), mode)
         if self._last_optimize_used_gear_search:
             self.progress_label.setText("最適な装備セットを反映しました。")
         else:
             self.progress_label.setText("最適解を反映しました。")
         for slot in self.slot_tables.keys():
             self._refresh_slot_selected_display(slot)
-        active_entry = variant_entries[0] if variant_entries else None
         if active_entry is None:
             expected_score = float(results[0][1])
             current_eval = self._evaluate_current_gearset_scores(mode)
@@ -8210,14 +10758,54 @@ class MainWindow(QMainWindow):
         self._job_mods_cache[job] = dict(mods)
         return mods
 
+    def _shutdown_background_tasks(self) -> bool:
+        if self.active_worker:
+            self.active_worker.cancel()
+        if self._saved_stats_worker:
+            self._saved_stats_worker.cancel()
+        for worker in list(self._icon_workers.values()):
+            worker.cancel()
+        deadline = time.monotonic() + 30.0
+        main_timeout_ms = max(0, int((deadline - time.monotonic()) * 1000))
+        main_done = self.thread_pool.waitForDone(main_timeout_ms)
+        icon_timeout_ms = max(0, int((deadline - time.monotonic()) * 1000))
+        icons_done = self.icon_thread_pool.waitForDone(icon_timeout_ms)
+        if not main_done or not icons_done:
+            logger.warning(
+                "Background workers did not stop before shutdown (main=%s, icons=%s)",
+                main_done,
+                icons_done,
+            )
+            return False
+        for client in (self.ff_client, self.xivapi_client, self.xiv_client):
+            try:
+                client.close()
+            except Exception:
+                logger.exception("Failed to close HTTP client %s", type(client).__name__)
+        return True
+
     def closeEvent(self, event) -> None:
-        try:
-            self._flush_saved_sets()
-        except Exception:
-            pass
-        data = load_auth()
-        data["ui_state"] = self._collect_ui_state()
-        save_auth(data)
+        self._closing = True
+        save_errors: List[str] = []
+        if not self._flush_saved_sets():
+            save_errors.append("保存セット")
+        if not self.on_save_auth(silent=True):
+            save_errors.append("認証・画面設定")
+        if not self._shutdown_background_tasks():
+            self._closing = False
+            event.ignore()
+            QMessageBox.warning(
+                self,
+                "終了待機",
+                "バックグラウンド処理を停止できませんでした。処理終了後にもう一度閉じてください。",
+            )
+            return
+        if save_errors:
+            QMessageBox.warning(
+                self,
+                "保存失敗",
+                f"終了時に保存できなかった項目があります: {', '.join(save_errors)}",
+            )
         super().closeEvent(event)
 
 

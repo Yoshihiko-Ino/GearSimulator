@@ -1,10 +1,13 @@
 GearSimulator Release
-Version: 1.0.7
+Version: 2.0.0
 
-Folders:
-- py/GearSimulator : Python 版配布ファイル
-- exe/GearSimulator.exe : Windows 向け単体実行ファイル
+配布ファイル:
+- GearSimulator.exe
+- GearSimulator_v2.0.0_py.zip
+- SHA256SUMS.txt
 
-起動方法:
-- exe 版は exe/GearSimulator.exe を直接起動してください。
-- Python 版は py/GearSimulator で依存関係を入れた後、run_gui.bat を実行してください。
+対応環境:
+- Windows 10 / 11
+- Python版はPython 3.9
+
+旧バージョンを上書きせず、別のフォルダへ配置してください。

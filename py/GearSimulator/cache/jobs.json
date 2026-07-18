@@ -55,6 +55,94 @@
     "modifier_vitality": 95,
     "modifier_hp": 100
   },
+  "CRP": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 90,
+    "modifier_mind": 90,
+    "modifier_vitality": 105,
+    "modifier_hp": 100
+  },
+  "BSM": {
+    "modifier_strength": 105,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 90,
+    "modifier_mind": 100,
+    "modifier_vitality": 90,
+    "modifier_hp": 100
+  },
+  "ARM": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 90,
+    "modifier_mind": 90,
+    "modifier_vitality": 105,
+    "modifier_hp": 100
+  },
+  "GSM": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 105,
+    "modifier_intelligence": 100,
+    "modifier_mind": 90,
+    "modifier_vitality": 90,
+    "modifier_hp": 100
+  },
+  "LTW": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 100,
+    "modifier_mind": 90,
+    "modifier_vitality": 105,
+    "modifier_hp": 100
+  },
+  "WVR": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 105,
+    "modifier_intelligence": 90,
+    "modifier_mind": 100,
+    "modifier_vitality": 90,
+    "modifier_hp": 100
+  },
+  "ALC": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 105,
+    "modifier_mind": 90,
+    "modifier_vitality": 90,
+    "modifier_hp": 100
+  },
+  "CUL": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 90,
+    "modifier_mind": 105,
+    "modifier_vitality": 90,
+    "modifier_hp": 100
+  },
+  "MIN": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 90,
+    "modifier_intelligence": 90,
+    "modifier_mind": 100,
+    "modifier_vitality": 90,
+    "modifier_hp": 100
+  },
+  "BTN": {
+    "modifier_strength": 90,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 100,
+    "modifier_mind": 90,
+    "modifier_vitality": 90,
+    "modifier_hp": 100
+  },
+  "FSH": {
+    "modifier_strength": 100,
+    "modifier_dexterity": 100,
+    "modifier_intelligence": 100,
+    "modifier_mind": 100,
+    "modifier_vitality": 100,
+    "modifier_hp": 100
+  },
   "PLD": {
     "modifier_strength": 100,
     "modifier_dexterity": 95,
@@ -246,5 +334,13 @@
     "modifier_mind": 80,
     "modifier_vitality": 100,
     "modifier_hp": 105
+  },
+  "BST": {
+    "modifier_strength": 110,
+    "modifier_dexterity": 105,
+    "modifier_intelligence": 50,
+    "modifier_mind": 90,
+    "modifier_vitality": 100,
+    "modifier_hp": 110
   }
 }

@@ -1,28 +1,43 @@
 # GearSimulator
 
-FF14 用の装備・マテリア・食事シミュレーターです。  
-このリポジトリでは配布用ファイルを公開しています。
+FF14用の装備・マテリア・食事シミュレーターです。
 
-## 配布内容
+## 配布ファイル
 
-### `exe/GearSimulator.exe`
-- Windows 向けの単体実行ファイルです。
-- アプリに必要な静的データは exe に内包されています。
-- 起動時に必要であれば、exe と同じ場所に `config` と `cache` フォルダを自動生成します。
+- `GearSimulator.exe`: Windows向け単体実行ファイル
+- `GearSimulator_v2.0.0_py.zip`: Python 3.9向けソース配布
+- `SHA256SUMS.txt`: 配布ファイルのSHA-256チェックサム
 
-### `py/GearSimulator`
-- Python 版の配布ファイルです。
-- 依存関係をインストールした後、`run_gui.bat` から起動できます。
+## Windows版の起動
 
-## 使い方
+1. GitHub Releasesから`GearSimulator.exe`をダウンロードします。
+2. 書き込み可能な任意のフォルダへ配置します。
+3. `GearSimulator.exe`を起動します。
 
-### exe 版
-1. `exe/GearSimulator.exe` を直接起動します。
+初回起動時に、exeと同じフォルダへ`config`と`cache`が作成されます。
 
-### Python 版
-1. Python 3.9 環境を用意します。
-2. `py/GearSimulator` で依存関係をインストールします。
-3. `run_gui.bat` を実行します。
+## Python版の起動
+
+1. Python 3.9を用意します。
+2. zipを展開します。
+3. 展開先で次を実行します。
+
+```powershell
+py -3.9 -m pip install -r requirements.txt
+.\run_gui.bat
+```
+
+## 旧バージョンからの移行
+
+- v2.0.0は旧バージョンと別のフォルダへ配置してください。
+- 旧フォルダと同じ親フォルダへ`GearSimulator_v2.0.0`として配置すると、初回起動時に認証・画面設定・保存セットを引き継げます。
+- 旧ファイルは削除・上書きしません。
+- 旧形式の保存スコアは装備を保持したまま「要再計算」と表示されます。対象セットを選択し、必要なFFLogsデータを取得してから「計算」を実行してください。
+
+## FFLogs連携
+
+FFLogs APIのClient IDとClient Secretを設定画面へ入力します。Client SecretはWindowsの暗号化機能で保護して保存されます。
 
 ## 変更履歴
-- 詳細は [CHANGELOG.md](CHANGELOG.md) を参照してください。
+
+[CHANGELOG.md](CHANGELOG.md)を参照してください。

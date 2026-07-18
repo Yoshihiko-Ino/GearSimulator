@@ -1,5 +1,5 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple
-import json
+import threading
 import time
 
 import httpx
@@ -16,6 +16,8 @@ class FFLogsClient:
         self.client_id = client_id
         self.client_secret = client_secret
         self._client = httpx.Client(timeout=25)
+        self._token_lock = threading.RLock()
+        self._cache_lock = threading.RLock()
         self.last_enemy_npcs: List[dict] = []
         self.last_friendlies: List[dict] = []
         self._access_token: Optional[str] = None
@@ -25,6 +27,9 @@ class FFLogsClient:
         self._response_cache_order: List[Tuple[str, Tuple[Tuple[str, Any], ...]]] = []
         self._response_cache_limit = 512
         self._fight_friendly_ids: Dict[int, set] = {}
+
+    def close(self) -> None:
+        self._client.close()
 
     @staticmethod
     def _norm_int(value: Any) -> Optional[int]:
@@ -36,21 +41,27 @@ class FFLogsClient:
             return None
 
     def ready(self) -> bool:
-        return bool(self.client_id and self.client_secret)
+        with self._token_lock:
+            return bool(self.client_id and self.client_secret)
 
     def set_credentials(self, client_id: str, client_secret: str) -> None:
-        if client_id != self.client_id or client_secret != self.client_secret:
-            self.client_id = client_id
-            self.client_secret = client_secret
-            self._access_token = None
-            self._token_expires_at = 0.0
+        changed = False
+        with self._token_lock:
+            if client_id != self.client_id or client_secret != self.client_secret:
+                self.client_id = client_id
+                self.client_secret = client_secret
+                self._access_token = None
+                self._token_expires_at = 0.0
+                changed = True
+        if changed:
             self.clear_cache()
 
     def clear_credentials(self) -> None:
-        self.client_id = None
-        self.client_secret = None
-        self._access_token = None
-        self._token_expires_at = 0.0
+        with self._token_lock:
+            self.client_id = None
+            self.client_secret = None
+            self._access_token = None
+            self._token_expires_at = 0.0
         self.clear_cache()
 
     def _cache_key(self, query: str, variables: dict) -> Tuple[str, Tuple[Tuple[str, Any], ...]]:
@@ -64,49 +75,52 @@ class FFLogsClient:
         return (query, norm)
 
     def clear_cache(self) -> None:
-        self._response_cache.clear()
-        self._response_cache_order.clear()
+        with self._cache_lock:
+            self._response_cache.clear()
+            self._response_cache_order.clear()
 
     def _ensure_token(self) -> str:
-        if not self.client_id or not self.client_secret:
-            raise RuntimeError("FFLogsのV2クライアント情報が設定されていません。")
-        now = time.time()
-        if self._access_token and now < self._token_expires_at:
-            return self._access_token
-        resp = self._client.post(
-            OAUTH_TOKEN_URL,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            raise RuntimeError(
-                f"FFLogs OAuth エラー (HTTP {status})。クライアントID/シークレットを確認してください。"
-            ) from e
-        data = resp.json()
-        token = data.get("access_token")
-        if not token:
-            raise RuntimeError("FFLogs OAuth のトークン取得に失敗しました。")
-        expires_in = data.get("expires_in")
-        self._access_token = token
-        if isinstance(expires_in, (int, float)) and expires_in > 0:
-            # Refresh a bit early.
-            self._token_expires_at = now + float(expires_in) - 30
-        else:
-            self._token_expires_at = now + 300
-        return token
+        with self._token_lock:
+            if not self.client_id or not self.client_secret:
+                raise RuntimeError("FFLogsのV2クライアント情報が設定されていません。")
+            now = time.time()
+            if self._access_token and now < self._token_expires_at:
+                return self._access_token
+            resp = self._client.post(
+                OAUTH_TOKEN_URL,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                raise RuntimeError(
+                    f"FFLogs OAuth エラー (HTTP {status})。クライアントID/シークレットを確認してください。"
+                ) from e
+            data = resp.json()
+            token = data.get("access_token")
+            if not token:
+                raise RuntimeError("FFLogs OAuth のトークン取得に失敗しました。")
+            expires_in = data.get("expires_in")
+            self._access_token = token
+            if isinstance(expires_in, (int, float)) and expires_in > 0:
+                # Refresh a bit early.
+                self._token_expires_at = now + float(expires_in) - 30
+            else:
+                self._token_expires_at = now + 300
+            return token
 
     def _post_graphql(self, query: str, variables: dict, use_cache: bool = True) -> dict:
         token = self._ensure_token()
         key = self._cache_key(query, variables)
         if use_cache:
-            cached = self._response_cache.get(key)
+            with self._cache_lock:
+                cached = self._response_cache.get(key)
             if cached is not None:
                 return cached
         resp = self._client.post(
@@ -127,12 +141,13 @@ class FFLogsClient:
         if data.get("errors"):
             raise RuntimeError(str(data.get("errors")))
         if use_cache:
-            if key not in self._response_cache:
-                self._response_cache_order.append(key)
-            self._response_cache[key] = data
-            while len(self._response_cache_order) > self._response_cache_limit:
-                oldest = self._response_cache_order.pop(0)
-                self._response_cache.pop(oldest, None)
+            with self._cache_lock:
+                if key not in self._response_cache:
+                    self._response_cache_order.append(key)
+                self._response_cache[key] = data
+                while len(self._response_cache_order) > self._response_cache_limit:
+                    oldest = self._response_cache_order.pop(0)
+                    self._response_cache.pop(oldest, None)
         return data
 
     def fetch_fights(self, report_code: str) -> List[dict]:
@@ -551,10 +566,7 @@ class FFLogsClient:
             stop_event=stop_event,
             progress=progress,
         )
-        all_events: List[dict] = []
-        for ev in events:
-            if ev.get("type") == "damage":
-                all_events.append(ev)
+        all_events = [ev for ev in events if ev.get("type") == "damage"]
         if progress:
             progress(100, f"ダメージを取得しました（{len(all_events)}件）")
         sim_log(
@@ -750,10 +762,7 @@ class FFLogsClient:
             "removedebuff",
             "removedebuffstack",
         }
-        filtered: List[dict] = []
-        for ev in events:
-            if ev.get("type") in keep_types:
-                filtered.append(ev)
+        filtered = [ev for ev in events if ev.get("type") in keep_types]
         filtered.sort(key=lambda ev: ev.get("timestamp") or ev.get("time") or 0)
         if progress:
             progress(100, f"時系列を取得しました（{len(filtered)}件）")
