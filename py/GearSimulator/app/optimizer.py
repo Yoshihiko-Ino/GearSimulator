@@ -8,7 +8,7 @@ import multiprocessing
 import os
 import time
 from bisect import bisect_right
-from collections import Counter, defaultdict
+from collections import defaultdict
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -1052,6 +1052,7 @@ class ActionReplayEntry:
     ext_dmg_mult: float
     ext_crit_bonus: float
     ext_dh_bonus: float
+    profile_id: int
 
 
 @dataclass(frozen=True)
@@ -1070,6 +1071,7 @@ class ScoreEvalContext:
     base_comp: Optional[Any] = None
     baseline_gcd: Optional[float] = None
     action_entries: Optional[List[ActionReplayEntry]] = None
+    action_profiles: Optional[List[ActionReplayEntry]] = None
     bucket_entries: Optional[List[BucketReplayEntry]] = None
     ability_names: Optional[Dict[int, str]] = None
     total_damage_all: float = 0.0
@@ -1087,34 +1089,199 @@ class GearSearchScoreContext:
     mode: str = "simdps"
 
 
-@dataclass
 class ExactStateNode:
-    parent: Optional["ExactStateNode"]
-    slot: str
-    melds: Tuple[MateriaSlotSelection, ...]
+    __slots__ = ("parent", "slot", "melds")
+
+    def __init__(
+        self,
+        parent: Optional["ExactStateNode"],
+        slot: str,
+        melds: Tuple[MateriaSlotSelection, ...],
+    ) -> None:
+        self.parent = parent
+        self.slot = slot
+        self.melds = melds
 
 
-def _exact_stat_tuple_adder(
-    length: int,
-) -> Callable[[Tuple[int, ...], Tuple[int, ...]], Tuple[int, ...]]:
-    if length == 4:
-        return lambda left, right: (
-            left[0] + right[0],
-            left[1] + right[1],
-            left[2] + right[2],
-            left[3] + right[3],
-        )
-    if length == 5:
-        return lambda left, right: (
-            left[0] + right[0],
-            left[1] + right[1],
-            left[2] + right[2],
-            left[3] + right[3],
-            left[4] + right[4],
-        )
-    return lambda left, right: tuple(
-        left[index] + right[index] for index in range(length)
-    )
+def _expand_exact_state_stage(
+    exact_states: Dict[Tuple[int, ...], Optional[ExactStateNode]],
+    combo_entries: Sequence[
+        Tuple[Tuple[int, ...], Tuple[MateriaSlotSelection, ...]]
+    ],
+    slot: str,
+    tuple_length: int,
+    *,
+    strict_gcd_mode: bool,
+    required_speed_stat: int,
+    speed_tuple_index: int,
+    base_speed_raw: int,
+    remaining_speed: int,
+    level_base_sub: int,
+    max_food_speed_bonus: Callable[[int], int],
+    enforce_state_limit: bool,
+    state_limit: int,
+) -> Tuple[Dict[Tuple[int, ...], ExactStateNode], bool]:
+    new_map: Dict[Tuple[int, ...], ExactStateNode] = {}
+    limit_hit = False
+
+    if tuple_length == 4:
+        for agg_stats, parent_node in exact_states.items():
+            left0, left1, left2, left3 = agg_stats
+            for add_stats, melds in combo_entries:
+                merged_stats = (
+                    left0 + add_stats[0],
+                    left1 + add_stats[1],
+                    left2 + add_stats[2],
+                    left3 + add_stats[3],
+                )
+                if strict_gcd_mode:
+                    speed_raw = base_speed_raw + (
+                        merged_stats[speed_tuple_index]
+                        if speed_tuple_index >= 0
+                        else 0
+                    )
+                    max_raw_speed = speed_raw + remaining_speed
+                    max_speed_stat = (
+                        max_raw_speed
+                        + max_food_speed_bonus(max_raw_speed)
+                        + level_base_sub
+                    )
+                    if max_speed_stat < required_speed_stat:
+                        continue
+                if merged_stats in new_map:
+                    continue
+                new_map[merged_stats] = ExactStateNode(parent_node, slot, melds)
+                if enforce_state_limit and len(new_map) > state_limit:
+                    limit_hit = True
+                    break
+            if limit_hit:
+                break
+        return new_map, limit_hit
+
+    if tuple_length == 5:
+        for agg_stats, parent_node in exact_states.items():
+            left0, left1, left2, left3, left4 = agg_stats
+            for add_stats, melds in combo_entries:
+                merged_stats = (
+                    left0 + add_stats[0],
+                    left1 + add_stats[1],
+                    left2 + add_stats[2],
+                    left3 + add_stats[3],
+                    left4 + add_stats[4],
+                )
+                if strict_gcd_mode:
+                    speed_raw = base_speed_raw + (
+                        merged_stats[speed_tuple_index]
+                        if speed_tuple_index >= 0
+                        else 0
+                    )
+                    max_raw_speed = speed_raw + remaining_speed
+                    max_speed_stat = (
+                        max_raw_speed
+                        + max_food_speed_bonus(max_raw_speed)
+                        + level_base_sub
+                    )
+                    if max_speed_stat < required_speed_stat:
+                        continue
+                if merged_stats in new_map:
+                    continue
+                new_map[merged_stats] = ExactStateNode(parent_node, slot, melds)
+                if enforce_state_limit and len(new_map) > state_limit:
+                    limit_hit = True
+                    break
+            if limit_hit:
+                break
+        return new_map, limit_hit
+
+    for agg_stats, parent_node in exact_states.items():
+        for add_stats, melds in combo_entries:
+            merged_stats = tuple(
+                agg_stats[index] + add_stats[index]
+                for index in range(tuple_length)
+            )
+            if strict_gcd_mode:
+                speed_raw = base_speed_raw + (
+                    merged_stats[speed_tuple_index]
+                    if speed_tuple_index >= 0
+                    else 0
+                )
+                max_raw_speed = speed_raw + remaining_speed
+                max_speed_stat = (
+                    max_raw_speed
+                    + max_food_speed_bonus(max_raw_speed)
+                    + level_base_sub
+                )
+                if max_speed_stat < required_speed_stat:
+                    continue
+            if merged_stats in new_map:
+                continue
+            new_map[merged_stats] = ExactStateNode(parent_node, slot, melds)
+            if enforce_state_limit and len(new_map) > state_limit:
+                limit_hit = True
+                break
+        if limit_hit:
+            break
+    return new_map, limit_hit
+
+
+def _expand_packed_exact_state_stage(
+    exact_states: Dict[int, Optional[ExactStateNode]],
+    combo_entries: Sequence[Tuple[int, Tuple[MateriaSlotSelection, ...]]],
+    slot: str,
+    *,
+    strict_gcd_mode: bool,
+    required_speed_stat: int,
+    speed_shift: int,
+    lane_mask: int,
+    base_speed_raw: int,
+    remaining_speed: int,
+    level_base_sub: int,
+    max_food_speed_bonus: Callable[[int], int],
+    enforce_state_limit: bool,
+    state_limit: int,
+) -> Tuple[Dict[int, ExactStateNode], bool]:
+    new_map: Dict[int, ExactStateNode] = {}
+    limit_hit = False
+    state_count = 0
+    if not strict_gcd_mode:
+        for agg_stats, parent_node in exact_states.items():
+            for add_stats, melds in combo_entries:
+                merged_stats = agg_stats + add_stats
+                if merged_stats in new_map:
+                    continue
+                new_map[merged_stats] = ExactStateNode(parent_node, slot, melds)
+                state_count += 1
+                if enforce_state_limit and state_count > state_limit:
+                    limit_hit = True
+                    break
+            if limit_hit:
+                break
+        return new_map, limit_hit
+
+    for agg_stats, parent_node in exact_states.items():
+        for add_stats, melds in combo_entries:
+            merged_stats = agg_stats + add_stats
+            speed_raw = base_speed_raw + (
+                (merged_stats >> speed_shift) & lane_mask
+            )
+            max_raw_speed = speed_raw + remaining_speed
+            max_speed_stat = (
+                max_raw_speed
+                + max_food_speed_bonus(max_raw_speed)
+                + level_base_sub
+            )
+            if max_speed_stat < required_speed_stat:
+                continue
+            if merged_stats in new_map:
+                continue
+            new_map[merged_stats] = ExactStateNode(parent_node, slot, melds)
+            state_count += 1
+            if enforce_state_limit and state_count > state_limit:
+                limit_hit = True
+                break
+        if limit_hit:
+            break
+    return new_map, limit_hit
 
 JOB_ALLOWED_STATS = {
     "PLD": {27, 22, 44, 19, 45},
@@ -1249,6 +1416,8 @@ def prepare_score_eval_context(
         )
     if ability_buckets:
         action_entries: List[ActionReplayEntry] = []
+        action_profiles: List[ActionReplayEntry] = []
+        action_profile_ids: Dict[Tuple[object, ...], int] = {}
         for key, bucket_damage in ability_buckets.items():
             if not bucket_damage:
                 continue
@@ -1286,24 +1455,41 @@ def prepare_score_eval_context(
                 dhit_chance_bonus=dh_bonus,
                 damage_multiplier=dmg_mult,
             )
-            action_entries.append(
-                ActionReplayEntry(
-                    action_id=int(action_id),
-                    bucket_damage=float(bucket_damage),
-                    norm_type=norm_type,
-                    is_dot=bool(is_dot),
-                    base_expected=base_expected,
-                    dmg_mult=dmg_mult,
-                    crit_bonus=crit_bonus,
-                    dh_bonus=dh_bonus,
-                    force_crit=force_crit,
-                    force_dh=force_dh,
-                    ext_dmg_mult=ext_dmg_mult,
-                    ext_crit_bonus=ext_crit_bonus,
-                    ext_dh_bonus=ext_dh_bonus,
-                )
+            profile_key = (
+                norm_type,
+                bool(is_dot),
+                force_crit,
+                force_dh,
+                crit_bonus + ext_crit_bonus,
+                dh_bonus + ext_dh_bonus,
+                dmg_mult * ext_dmg_mult,
             )
+            profile_id = action_profile_ids.get(profile_key)
+            is_new_profile = profile_id is None
+            if profile_id is None:
+                profile_id = len(action_profiles)
+                action_profile_ids[profile_key] = profile_id
+            entry = ActionReplayEntry(
+                action_id=int(action_id),
+                bucket_damage=float(bucket_damage),
+                norm_type=norm_type,
+                is_dot=bool(is_dot),
+                base_expected=base_expected,
+                dmg_mult=dmg_mult,
+                crit_bonus=crit_bonus,
+                dh_bonus=dh_bonus,
+                force_crit=force_crit,
+                force_dh=force_dh,
+                ext_dmg_mult=ext_dmg_mult,
+                ext_crit_bonus=ext_crit_bonus,
+                ext_dh_bonus=ext_dh_bonus,
+                profile_id=profile_id,
+            )
+            action_entries.append(entry)
+            if is_new_profile:
+                action_profiles.append(entry)
         ctx.action_entries = action_entries
+        ctx.action_profiles = action_profiles
         return ctx
 
     bucket_entries: List[BucketReplayEntry] = []
@@ -2928,32 +3114,102 @@ def evaluate_score_pair(
         expected_sim_damage = 0.0
         contrib_rows: List[Tuple[float, str]] = []
         if action_entries is not None:
-            for entry in action_entries:
-                bucket_damage = entry.bucket_damage
-                new_expected = xivmath.expected_damage_per_potency(
-                    new_comp,
-                    entry.norm_type,
-                    entry.is_dot,
-                    auto_dh=entry.force_dh,
-                    auto_crit=entry.force_crit,
-                    crit_chance_bonus=(entry.crit_bonus + entry.ext_crit_bonus + crit_rate_offset),
-                    dhit_chance_bonus=(entry.dh_bonus + entry.ext_dh_bonus + dhit_rate_offset),
-                    damage_multiplier=(entry.dmg_mult * entry.ext_dmg_mult),
-                )
-                ratio = new_expected / max(1e-6, entry.base_expected)
-                sim_part = bucket_damage * ratio
-                sim_damage += sim_part
-                if include_expected and (abs(crit_rate_offset) > 1e-12 or abs(dhit_rate_offset) > 1e-12):
-                    expected_new = xivmath.expected_damage_per_potency(
+            action_profiles = eval_ctx.action_profiles if eval_ctx else None
+            profile_expected: Optional[List[float]] = None
+            expected_profile_expected: Optional[List[float]] = None
+            if action_profiles:
+                profile_expected = [
+                    xivmath.expected_damage_per_potency(
                         new_comp,
                         entry.norm_type,
                         entry.is_dot,
                         auto_dh=entry.force_dh,
                         auto_crit=entry.force_crit,
-                        crit_chance_bonus=(entry.crit_bonus + entry.ext_crit_bonus),
-                        dhit_chance_bonus=(entry.dh_bonus + entry.ext_dh_bonus),
+                        crit_chance_bonus=(
+                            entry.crit_bonus
+                            + entry.ext_crit_bonus
+                            + crit_rate_offset
+                        ),
+                        dhit_chance_bonus=(
+                            entry.dh_bonus
+                            + entry.ext_dh_bonus
+                            + dhit_rate_offset
+                        ),
                         damage_multiplier=(entry.dmg_mult * entry.ext_dmg_mult),
                     )
+                    for entry in action_profiles
+                ]
+                if include_expected and (
+                    abs(crit_rate_offset) > 1e-12
+                    or abs(dhit_rate_offset) > 1e-12
+                ):
+                    expected_profile_expected = [
+                        xivmath.expected_damage_per_potency(
+                            new_comp,
+                            entry.norm_type,
+                            entry.is_dot,
+                            auto_dh=entry.force_dh,
+                            auto_crit=entry.force_crit,
+                            crit_chance_bonus=(
+                                entry.crit_bonus + entry.ext_crit_bonus
+                            ),
+                            dhit_chance_bonus=(
+                                entry.dh_bonus + entry.ext_dh_bonus
+                            ),
+                            damage_multiplier=(
+                                entry.dmg_mult * entry.ext_dmg_mult
+                            ),
+                        )
+                        for entry in action_profiles
+                    ]
+            for entry in action_entries:
+                bucket_damage = entry.bucket_damage
+                if profile_expected is not None:
+                    new_expected = profile_expected[entry.profile_id]
+                else:
+                    new_expected = xivmath.expected_damage_per_potency(
+                        new_comp,
+                        entry.norm_type,
+                        entry.is_dot,
+                        auto_dh=entry.force_dh,
+                        auto_crit=entry.force_crit,
+                        crit_chance_bonus=(
+                            entry.crit_bonus
+                            + entry.ext_crit_bonus
+                            + crit_rate_offset
+                        ),
+                        dhit_chance_bonus=(
+                            entry.dh_bonus
+                            + entry.ext_dh_bonus
+                            + dhit_rate_offset
+                        ),
+                        damage_multiplier=(
+                            entry.dmg_mult * entry.ext_dmg_mult
+                        ),
+                    )
+                ratio = new_expected / max(1e-6, entry.base_expected)
+                sim_part = bucket_damage * ratio
+                sim_damage += sim_part
+                if include_expected and (abs(crit_rate_offset) > 1e-12 or abs(dhit_rate_offset) > 1e-12):
+                    if expected_profile_expected is not None:
+                        expected_new = expected_profile_expected[entry.profile_id]
+                    else:
+                        expected_new = xivmath.expected_damage_per_potency(
+                            new_comp,
+                            entry.norm_type,
+                            entry.is_dot,
+                            auto_dh=entry.force_dh,
+                            auto_crit=entry.force_crit,
+                            crit_chance_bonus=(
+                                entry.crit_bonus + entry.ext_crit_bonus
+                            ),
+                            dhit_chance_bonus=(
+                                entry.dh_bonus + entry.ext_dh_bonus
+                            ),
+                            damage_multiplier=(
+                                entry.dmg_mult * entry.ext_dmg_mult
+                            ),
+                        )
                     expected_ratio = expected_new / max(1e-6, entry.base_expected)
                     expected_sim_damage += bucket_damage * expected_ratio
                 else:
@@ -3949,10 +4205,22 @@ def optimize(
     # Reuse score evaluations across beam, food, and local refinement loops.
     # Keyed by combat-relevant stats + food id for the current optimize call context.
     eval_cache: Dict[Tuple[Tuple[int, ...], int], Tuple[float, float]] = {}
-    cache_stat_ids = (1, 2, 3, 4, 5, 6, 19, 22, 27, 44, 45, 46)
 
     def _stats_cache_key(stats: Dict[int, int]) -> Tuple[int, ...]:
-        return tuple(int(stats.get(stat_id, 0)) for stat_id in cache_stat_ids)
+        return (
+            int(stats.get(1, 0)),
+            int(stats.get(2, 0)),
+            int(stats.get(3, 0)),
+            int(stats.get(4, 0)),
+            int(stats.get(5, 0)),
+            int(stats.get(6, 0)),
+            int(stats.get(19, 0)),
+            int(stats.get(22, 0)),
+            int(stats.get(27, 0)),
+            int(stats.get(44, 0)),
+            int(stats.get(45, 0)),
+            int(stats.get(46, 0)),
+        )
 
     def _evaluate_direct(
         stats: Dict[int, int],
@@ -4000,8 +4268,9 @@ def optimize(
     def _build_candidate_gearset(
         meld_map: Dict[str, List[MateriaSlotSelection]],
         food: Optional[FoodRecord],
+        meld_changes: Optional[int] = None,
     ) -> Gearset:
-        return Gearset(
+        candidate = Gearset(
             job=gearset.job,
             items={
                 slot: MateriaAwareSelection(
@@ -4017,50 +4286,78 @@ def optimize(
             race=gearset.race,
             level=level_value,
         )
+        if meld_changes is None:
+            meld_changes = _meld_map_change_count(meld_map)
+        setattr(candidate, "_optimizer_meld_change_count", int(meld_changes))
+        return candidate
 
-    def _meld_counter(melds) -> Counter[Tuple[int, int]]:
-        counter: Counter[Tuple[int, int]] = Counter()
+    def _meld_counter(melds) -> Tuple[Dict[Tuple[int, int], int], int]:
+        counter: Dict[Tuple[int, int], int] = {}
+        total = 0
         for meld in melds or []:
             if not meld:
                 continue
             try:
                 stat_id = int(meld.base_param)
                 grade = int(meld.grade)
-            except Exception:
+            except (TypeError, ValueError, OverflowError):
                 continue
             if stat_id <= 0 or grade <= 0:
                 continue
-            counter[(stat_id, grade)] += 1
-        return counter
+            key = (stat_id, grade)
+            counter[key] = counter.get(key, 0) + 1
+            total += 1
+        return counter, total
 
-    def _selection_meld_counter(selection) -> Counter[Tuple[int, int]]:
-        return _meld_counter(selection.materia if selection else [])
-
-    baseline_meld_counters: Dict[str, Counter[Tuple[int, int]]] = {
-        slot: Counter() if (no_meld_slots and slot in no_meld_slots) else _selection_meld_counter(sel)
+    baseline_meld_counters: Dict[
+        str,
+        Tuple[Dict[Tuple[int, int], int], int],
+    ] = {
+        slot: ({}, 0)
+        if (no_meld_slots and slot in no_meld_slots)
+        else _meld_counter(sel.materia if sel else [])
         for slot, sel in (gearset.items or {}).items()
     }
-    meld_change_cache: Dict[int, int] = {}
-
     def _meld_map_change_count(
         meld_map: Dict[str, List[MateriaSlotSelection]],
     ) -> int:
         total_changes = 0
-        slot_names = set(baseline_meld_counters.keys()) | set(meld_map.keys())
-        for slot in slot_names:
-            base_counter = baseline_meld_counters.get(slot) or Counter()
-            cand_counter = _meld_counter(meld_map.get(slot))
+        for slot, (base_counter, base_total) in baseline_meld_counters.items():
+            cand_counter, cand_total = _meld_counter(meld_map.get(slot))
             unchanged = sum(
                 min(base_count, cand_counter.get(key, 0))
                 for key, base_count in base_counter.items()
             )
-            total_changes += max(sum(base_counter.values()), sum(cand_counter.values())) - unchanged
+            total_changes += max(base_total, cand_total) - unchanged
+        for slot, melds in meld_map.items():
+            if slot not in baseline_meld_counters:
+                _counter, cand_total = _meld_counter(melds)
+                total_changes += cand_total
+        return total_changes
+
+    def _meld_node_change_count(meld_node: Optional[ExactStateNode]) -> int:
+        total_changes = 0
+        seen_slots: set[str] = set()
+        current = meld_node
+        while current is not None:
+            slot = current.slot
+            seen_slots.add(slot)
+            base_counter, base_total = baseline_meld_counters.get(slot, ({}, 0))
+            cand_counter, cand_total = _meld_counter(current.melds)
+            unchanged = sum(
+                min(base_count, cand_counter.get(key, 0))
+                for key, base_count in base_counter.items()
+            )
+            total_changes += max(base_total, cand_total) - unchanged
+            current = current.parent
+        for slot, (_base_counter, base_total) in baseline_meld_counters.items():
+            if slot not in seen_slots:
+                total_changes += base_total
         return total_changes
 
     def _meld_change_count(gs: Gearset) -> int:
-        cache_key = id(gs)
-        cached = meld_change_cache.get(cache_key)
-        if cached is not None:
+        cached = getattr(gs, "_optimizer_meld_change_count", None)
+        if isinstance(cached, int):
             return cached
         total_changes = _meld_map_change_count(
             {
@@ -4069,7 +4366,7 @@ def optimize(
                 if selection is not None
             }
         )
-        meld_change_cache[cache_key] = total_changes
+        setattr(gs, "_optimizer_meld_change_count", total_changes)
         return total_changes
 
     def _result_sort_key(entry: Tuple[Gearset, float, float]) -> Tuple[float, int, float]:
@@ -4138,76 +4435,119 @@ def optimize(
     results: List[Tuple[Gearset, float, float]] = []
 
     exact_mode_fallback = False
-    exact_states: Dict[Tuple[int, ...], Optional[ExactStateNode]] = {}
+    exact_states: Dict[Any, Optional[ExactStateNode]] = {}
     relevant_stats_sorted: List[int] = []
     relevant_stat_index: Dict[int, int] = {}
     exact_stat_tuple_len = 0
+    exact_pack_bits = 0
+    exact_pack_mask = 0
+    exact_pack_shifts: List[int] = []
     if exact_mode_requested:
         relevant_stats_sorted = sorted(allowed_stats)
         relevant_stat_index = {
             stat_id: idx for idx, stat_id in enumerate(relevant_stats_sorted)
         }
         exact_stat_tuple_len = len(relevant_stats_sorted)
-        add_exact_stat_tuples = _exact_stat_tuple_adder(exact_stat_tuple_len)
-        zero_stats_key = tuple(0 for _ in range(exact_stat_tuple_len))
+        if exact_stat_tuple_len in {4, 5}:
+            max_totals = [0] * exact_stat_tuple_len
+            packable = True
+            for slot, _item in slots_to_process:
+                combos = per_slot_combos.get(slot, [])
+                for stat_index, stat_id in enumerate(relevant_stats_sorted):
+                    values = [int(stats.get(stat_id, 0)) for stats, _melds, _score in combos]
+                    if any(value < 0 for value in values):
+                        packable = False
+                        break
+                    max_totals[stat_index] += max(values, default=0)
+                if not packable:
+                    break
+            if packable:
+                exact_pack_bits = max(1, max(max_totals, default=0).bit_length())
+                exact_pack_mask = (1 << exact_pack_bits) - 1
+                exact_pack_shifts = [
+                    stat_index * exact_pack_bits
+                    for stat_index in range(exact_stat_tuple_len)
+                ]
+        zero_stats_key: Any = 0 if exact_pack_bits else tuple(
+            0 for _ in range(exact_stat_tuple_len)
+        )
         speed_stat_tuple_index = relevant_stat_index.get(speed_stat_id, -1)
         exact_states = {zero_stats_key: None}
         if debug_enabled:
-            sim_log("[opt] exact_mode enabled")
+            sim_log(
+                f"[opt] exact_mode enabled packed={bool(exact_pack_bits)} "
+                f"lane_bits={exact_pack_bits}"
+            )
         exact_state_limit = 600000 if mode in {"simdps", "simdps_self"} else 1200000
 
         for slot_idx, (slot, _item) in enumerate(slots_to_process):
             if stop_event and stop_event.is_set():
                 return []
-            new_map: Dict[Tuple[int, ...], Optional[ExactStateNode]] = {}
             combos = per_slot_combos.get(slot, [])
             unique_combo_entries: List[
-                Tuple[Tuple[int, ...], List[MateriaSlotSelection]]
+                Tuple[Any, Tuple[MateriaSlotSelection, ...]]
             ] = []
-            seen_combo_tuples: set[Tuple[int, ...]] = set()
+            seen_combo_tuples: set[Any] = set()
             for add_stats, melds, _score in combos:
                 add_stats_tuple = tuple(
                     int(add_stats.get(stat_id, 0))
                     for stat_id in relevant_stats_sorted
                 )
-                if add_stats_tuple in seen_combo_tuples:
-                    continue
-                seen_combo_tuples.add(add_stats_tuple)
-                unique_combo_entries.append((add_stats_tuple, melds))
-            before_count = len(exact_states)
-            limit_hit = False
-            for agg_stats_tuple, parent_node in exact_states.items():
-                for add_stats_tuple, melds in unique_combo_entries:
-                    merged_stats_tuple = add_exact_stat_tuples(
-                        agg_stats_tuple,
-                        add_stats_tuple,
+                add_stats_key: Any
+                if exact_pack_bits:
+                    add_stats_key = sum(
+                        value << exact_pack_shifts[stat_index]
+                        for stat_index, value in enumerate(add_stats_tuple)
                     )
-                    if strict_gcd_mode and required_speed_stat is not None:
-                        speed_raw = base_speed_raw + int(
-                            merged_stats_tuple[speed_stat_tuple_index]
-                            if speed_stat_tuple_index >= 0
-                            else 0
-                        )
-                        remain_speed = remaining_max_speed[slot_idx + 1]
-                        max_raw_speed = speed_raw + remain_speed
-                        max_speed_stat = max_raw_speed + _max_food_speed_bonus(max_raw_speed) + level_base_sub
-                        if max_speed_stat < required_speed_stat:
-                            continue
-                    if merged_stats_tuple not in new_map:
-                        new_map[merged_stats_tuple] = ExactStateNode(
-                            parent=parent_node,
-                            slot=slot,
-                            melds=tuple(melds),
-                        )
-                        if (
-                            mode in {"simdps", "simdps_self"}
-                            and len(new_map) > exact_state_limit
-                        ):
-                            exact_mode_fallback = True
-                            limit_hit = True
-                            break
-                if limit_hit:
-                    break
+                else:
+                    add_stats_key = add_stats_tuple
+                if add_stats_key in seen_combo_tuples:
+                    continue
+                seen_combo_tuples.add(add_stats_key)
+                unique_combo_entries.append((add_stats_key, tuple(melds)))
+            before_count = len(exact_states)
+            if exact_pack_bits:
+                new_map, limit_hit = _expand_packed_exact_state_stage(
+                    exact_states,
+                    unique_combo_entries,
+                    slot,
+                    strict_gcd_mode=bool(
+                        strict_gcd_mode and required_speed_stat is not None
+                    ),
+                    required_speed_stat=int(required_speed_stat or 0),
+                    speed_shift=(
+                        exact_pack_shifts[speed_stat_tuple_index]
+                        if speed_stat_tuple_index >= 0
+                        else 0
+                    ),
+                    lane_mask=exact_pack_mask,
+                    base_speed_raw=base_speed_raw,
+                    remaining_speed=remaining_max_speed[slot_idx + 1],
+                    level_base_sub=level_base_sub,
+                    max_food_speed_bonus=_max_food_speed_bonus,
+                    enforce_state_limit=mode in {"simdps", "simdps_self"},
+                    state_limit=exact_state_limit,
+                )
+            else:
+                new_map, limit_hit = _expand_exact_state_stage(
+                    exact_states,
+                    unique_combo_entries,
+                    slot,
+                    exact_stat_tuple_len,
+                    strict_gcd_mode=bool(
+                        strict_gcd_mode and required_speed_stat is not None
+                    ),
+                    required_speed_stat=int(required_speed_stat or 0),
+                    speed_tuple_index=speed_stat_tuple_index,
+                    base_speed_raw=base_speed_raw,
+                    remaining_speed=remaining_max_speed[slot_idx + 1],
+                    level_base_sub=level_base_sub,
+                    max_food_speed_bonus=_max_food_speed_bonus,
+                    enforce_state_limit=mode in {"simdps", "simdps_self"},
+                    state_limit=exact_state_limit,
+                )
+            if limit_hit:
+                exact_mode_fallback = True
             if debug_enabled:
                 sim_log(
                     f"[opt] exact_stage slot={slot} base_states={before_count} "
@@ -4231,10 +4571,10 @@ def optimize(
                 sim_log(f"[opt] exact_food_eval states={len(exact_states)} foods={len(candidate_foods)}")
             exact_state_count = len(exact_states)
             exact_candidates: Optional[
-                List[Tuple[int, Tuple[int, ...], Optional[ExactStateNode]]]
+                List[Tuple[int, Any, Optional[ExactStateNode]]]
             ] = None
             adaptive_fallback_candidates: List[
-                Tuple[int, Tuple[int, ...], Optional[ExactStateNode]]
+                Tuple[int, Any, Optional[ExactStateNode]]
             ] = []
             adaptive_shortlist_enabled = False
             adaptive_gap_threshold = 4.0
@@ -4245,9 +4585,14 @@ def optimize(
             pie_idx = relevant_stat_index.get(6)
             speed_idx = relevant_stat_index.get(speed_stat_id)
 
-            def _tuple_stat(stats_tuple: Tuple[int, ...], stat_idx: Optional[int]) -> int:
+            def _tuple_stat(stats_tuple: Any, stat_idx: Optional[int]) -> int:
                 if stat_idx is None:
                     return 0
+                if exact_pack_bits:
+                    return int(
+                        (stats_tuple >> exact_pack_shifts[stat_idx])
+                        & exact_pack_mask
+                    )
                 return int(stats_tuple[stat_idx])
 
             # Exact evaluation can be very expensive for simdps high-precision.
@@ -4276,10 +4621,10 @@ def optimize(
                 # to avoid full materialization+sort of every exact state.
                 mix_heaps: Dict[
                     Tuple[int, int, int, int],
-                    List[Tuple[float, int, Tuple[int, ...], Optional[ExactStateNode]]],
+                    List[Tuple[float, int, Any, Optional[ExactStateNode]]],
                 ] = {}
                 global_heap: List[
-                    Tuple[float, int, Tuple[int, ...], Optional[ExactStateNode]]
+                    Tuple[float, int, Any, Optional[ExactStateNode]]
                 ] = []
                 scored_count = 0
                 seq = 0
@@ -4299,19 +4644,33 @@ def optimize(
                         return val
                     return val + min((val * int(bonus.percentage)) // 100, int(bonus.maximum))
 
-                exact_speed_values = {
-                    base_speed + _tuple_stat(stats_tuple, speed_idx)
-                    for stats_tuple in exact_states.keys()
-                }
+                if exact_pack_bits and speed_idx is not None:
+                    speed_shift = exact_pack_shifts[speed_idx]
+                    exact_speed_values = {
+                        base_speed
+                        + ((int(stats_key) >> speed_shift) & exact_pack_mask)
+                        for stats_key in exact_states.keys()
+                    }
+                else:
+                    exact_speed_values = {
+                        base_speed + _tuple_stat(stats_key, speed_idx)
+                        for stats_key in exact_states.keys()
+                    }
+
+                def _bonus_pair(bonus) -> Tuple[int, int]:
+                    if not bonus:
+                        return 0, 0
+                    return int(bonus.percentage), int(bonus.maximum)
+
                 for candidate_food in candidate_foods:
                     bonuses = candidate_food.bonuses if candidate_food else {}
                     coarse_food_profiles.append(
                         (
-                            bonuses.get(27),
-                            bonuses.get(22),
-                            bonuses.get(44),
-                            bonuses.get(19),
-                            bonuses.get(6),
+                            _bonus_pair(bonuses.get(27)),
+                            _bonus_pair(bonuses.get(22)),
+                            _bonus_pair(bonuses.get(44)),
+                            _bonus_pair(bonuses.get(19)),
+                            _bonus_pair(bonuses.get(6)),
                         )
                     )
                     bonus_speed = bonuses.get(speed_stat_id)
@@ -4355,15 +4714,85 @@ def optimize(
                         )
                     coarse_speed_profiles.append(speed_profile)
 
-                for meld_stats_tuple, meld_node in exact_states.items():
+                def _exact_state_rows():
+                    if exact_pack_bits:
+                        mask = exact_pack_mask
+                        crit_shift = exact_pack_shifts[crit_idx] if crit_idx is not None else None
+                        dh_shift = exact_pack_shifts[dh_idx] if dh_idx is not None else None
+                        det_shift = exact_pack_shifts[det_idx] if det_idx is not None else None
+                        ten_shift = exact_pack_shifts[ten_idx] if ten_idx is not None else None
+                        pie_shift = exact_pack_shifts[pie_idx] if pie_idx is not None else None
+                        speed_shift_local = (
+                            exact_pack_shifts[speed_idx]
+                            if speed_idx is not None
+                            else None
+                        )
+                        for stats_key, node in exact_states.items():
+                            yield (
+                                stats_key,
+                                node,
+                                base_crit
+                                + (
+                                    (stats_key >> crit_shift) & mask
+                                    if crit_shift is not None
+                                    else 0
+                                ),
+                                base_dh
+                                + (
+                                    (stats_key >> dh_shift) & mask
+                                    if dh_shift is not None
+                                    else 0
+                                ),
+                                base_det
+                                + (
+                                    (stats_key >> det_shift) & mask
+                                    if det_shift is not None
+                                    else 0
+                                ),
+                                base_ten
+                                + (
+                                    (stats_key >> ten_shift) & mask
+                                    if ten_shift is not None
+                                    else 0
+                                ),
+                                base_pie
+                                + (
+                                    (stats_key >> pie_shift) & mask
+                                    if pie_shift is not None
+                                    else 0
+                                ),
+                                base_speed
+                                + (
+                                    (stats_key >> speed_shift_local) & mask
+                                    if speed_shift_local is not None
+                                    else 0
+                                ),
+                            )
+                        return
+                    for stats_key, node in exact_states.items():
+                        yield (
+                            stats_key,
+                            node,
+                            base_crit + _tuple_stat(stats_key, crit_idx),
+                            base_dh + _tuple_stat(stats_key, dh_idx),
+                            base_det + _tuple_stat(stats_key, det_idx),
+                            base_ten + _tuple_stat(stats_key, ten_idx),
+                            base_pie + _tuple_stat(stats_key, pie_idx),
+                            base_speed + _tuple_stat(stats_key, speed_idx),
+                        )
+
+                for (
+                    meld_stats_tuple,
+                    meld_node,
+                    crit_val,
+                    dh_val,
+                    det_val,
+                    ten_val,
+                    pie_val,
+                    speed_val,
+                ) in _exact_state_rows():
                     if stop_event and stop_event.is_set():
                         break
-                    crit_val = base_crit + _tuple_stat(meld_stats_tuple, crit_idx)
-                    dh_val = base_dh + _tuple_stat(meld_stats_tuple, dh_idx)
-                    det_val = base_det + _tuple_stat(meld_stats_tuple, det_idx)
-                    ten_val = base_ten + _tuple_stat(meld_stats_tuple, ten_idx)
-                    pie_val = base_pie + _tuple_stat(meld_stats_tuple, pie_idx)
-                    speed_val = base_speed + _tuple_stat(meld_stats_tuple, speed_idx)
 
                     best_coarse: Optional[float] = None
                     for food_index, (
@@ -4373,11 +4802,51 @@ def optimize(
                         bonus_ten,
                         bonus_pie,
                     ) in enumerate(coarse_food_profiles):
-                        fed_crit = _apply_bonus(crit_val, bonus_crit)
-                        fed_dh = _apply_bonus(dh_val, bonus_dh)
-                        fed_det = _apply_bonus(det_val, bonus_det)
-                        fed_ten = _apply_bonus(ten_val, bonus_ten)
-                        fed_pie = _apply_bonus(pie_val, bonus_pie)
+                        fed_crit = (
+                            crit_val
+                            + min(
+                                (crit_val * bonus_crit[0]) // 100,
+                                bonus_crit[1],
+                            )
+                            if bonus_crit[0]
+                            else crit_val
+                        )
+                        fed_dh = (
+                            dh_val
+                            + min(
+                                (dh_val * bonus_dh[0]) // 100,
+                                bonus_dh[1],
+                            )
+                            if bonus_dh[0]
+                            else dh_val
+                        )
+                        fed_det = (
+                            det_val
+                            + min(
+                                (det_val * bonus_det[0]) // 100,
+                                bonus_det[1],
+                            )
+                            if bonus_det[0]
+                            else det_val
+                        )
+                        fed_ten = (
+                            ten_val
+                            + min(
+                                (ten_val * bonus_ten[0]) // 100,
+                                bonus_ten[1],
+                            )
+                            if bonus_ten[0]
+                            else ten_val
+                        )
+                        fed_pie = (
+                            pie_val
+                            + min(
+                                (pie_val * bonus_pie[0]) // 100,
+                                bonus_pie[1],
+                            )
+                            if bonus_pie[0]
+                            else pie_val
+                        )
                         (
                             fed_speed,
                             _coarse_gcd,
@@ -4408,7 +4877,10 @@ def optimize(
                         int(det_val // 18),
                         int(speed_val // 18),
                     )
-                    mix_heap = mix_heaps.setdefault(mix_sig, [])
+                    mix_heap = mix_heaps.get(mix_sig)
+                    if mix_heap is None:
+                        mix_heap = []
+                        mix_heaps[mix_sig] = mix_heap
                     keep_for_mix = len(mix_heap) < shortlist_per_mix or float(best_coarse) > mix_heap[0][0]
                     keep_for_global = (
                         len(global_heap) < fallback_shortlist_limit
@@ -4433,7 +4905,7 @@ def optimize(
                             heapq.heapreplace(global_heap, packed)
 
                 shortlist_entries: List[
-                    Tuple[float, int, Tuple[int, ...], Optional[ExactStateNode]]
+                    Tuple[float, int, Any, Optional[ExactStateNode]]
                 ] = []
                 for mix_heap in mix_heaps.values():
                     shortlist_entries.extend(sorted(mix_heap, key=lambda x: x[0], reverse=True))
@@ -4472,37 +4944,31 @@ def optimize(
 
             exact_evaluated = 0
             exact_kept = 0
-            exact_result_limit = 2048 if mode in {"simdps", "simdps_self"} else 12000
-            exact_heap: List[Tuple[float, int, int, Gearset, float]] = []
+            # Exact mode does not run the later local-refinement path and returns
+            # at most eight variants. Keep enough entries for all final checks,
+            # but defer Gearset construction until the heap is finalized.
+            exact_result_limit = 96
+            exact_heap: List[
+                Tuple[
+                    float,
+                    int,
+                    float,
+                    int,
+                    Optional[ExactStateNode],
+                    Optional[FoodRecord],
+                    float,
+                ]
+            ] = []
             exact_seq = 0
-            exact_combined_stats_cache: Dict[Tuple[int, ...], Dict[int, int]] = {}
-            exact_meld_map_cache: Dict[int, Dict[str, List[MateriaSlotSelection]]] = {}
 
-            def _combined_stats_from_exact_key(stats_key_tuple: Tuple[int, ...]) -> Dict[int, int]:
-                cached = exact_combined_stats_cache.get(stats_key_tuple)
-                if cached is not None:
-                    return cached
+            def _combined_stats_from_exact_key(stats_key_tuple: Any) -> Dict[int, int]:
                 combined_stats = base_stats.copy()
-                for stat_idx, val in enumerate(stats_key_tuple):
+                for stat_idx, stat_id in enumerate(relevant_stats_sorted):
+                    val = _tuple_stat(stats_key_tuple, stat_idx)
                     if not val:
                         continue
-                    stat_id = relevant_stats_sorted[stat_idx]
                     combined_stats[stat_id] = combined_stats.get(stat_id, 0) + int(val)
-                exact_combined_stats_cache[stats_key_tuple] = combined_stats
                 return combined_stats
-
-            def _meld_map_from_exact_node(
-                meld_node: Optional[ExactStateNode],
-            ) -> Dict[str, List[MateriaSlotSelection]]:
-                if meld_node is None:
-                    return {}
-                cache_key = id(meld_node)
-                cached = exact_meld_map_cache.get(cache_key)
-                if cached is not None:
-                    return cached
-                rebuilt = _reconstruct_exact_meld_map(meld_node)
-                exact_meld_map_cache[cache_key] = rebuilt
-                return rebuilt
 
             if exact_candidates is None:
                 eval_source = exact_states.items()
@@ -4522,29 +4988,39 @@ def optimize(
                     candidate_seq, meld_stats_tuple, meld_node = source_entry
                     evaluated_candidate_seqs.add(candidate_seq)
                     combined_stats = _combined_stats_from_exact_key(meld_stats_tuple)
-                resolved_meld_map: Optional[Dict[str, List[MateriaSlotSelection]]] = None
                 resolved_meld_changes: Optional[int] = None
                 for food in candidate_foods:
                     exact_evaluated += 1
                     score, gcd = _evaluate_with_cache(combined_stats, food)
                     if not gcd_meets_constraints(gcd, gearset.target_gcd, gcd_constraint):
                         continue
-                    if resolved_meld_map is None:
-                        resolved_meld_map = _meld_map_from_exact_node(meld_node)
-                        resolved_meld_changes = _meld_map_change_count(resolved_meld_map)
                     exact_kept += 1
                     exact_seq += 1
-                    rank = (float(score), -int(resolved_meld_changes or 0))
+                    score_value = float(score)
+                    if (
+                        len(exact_heap) >= exact_result_limit
+                        and score_value < exact_heap[0][0]
+                    ):
+                        continue
+                    if resolved_meld_changes is None:
+                        resolved_meld_changes = _meld_node_change_count(meld_node)
+                    rank = (
+                        score_value,
+                        -int(resolved_meld_changes or 0),
+                        -float(gcd),
+                    )
                     if len(exact_heap) < exact_result_limit or rank > (
                         exact_heap[0][0],
                         exact_heap[0][1],
+                        exact_heap[0][2],
                     ):
-                        new_gearset = _build_candidate_gearset(resolved_meld_map, food)
                         heap_entry = (
                             rank[0],
                             rank[1],
+                            rank[2],
                             exact_seq,
-                            new_gearset,
+                            meld_node,
+                            food,
                             float(gcd),
                         )
                     else:
@@ -4563,7 +5039,7 @@ def optimize(
             ):
                 distinct_scores: List[float] = []
                 if exact_heap:
-                    for val in sorted((x[0] for x in exact_heap), reverse=True):
+                    for val in sorted((entry[0] for entry in exact_heap), reverse=True):
                         if not distinct_scores or abs(val - distinct_scores[-1]) > 1e-6:
                             distinct_scores.append(val)
                         if len(distinct_scores) >= 2:
@@ -4589,7 +5065,6 @@ def optimize(
                             continue
                         evaluated_candidate_seqs.add(candidate_seq)
                         combined_stats = _combined_stats_from_exact_key(meld_stats_tuple)
-                        resolved_meld_map: Optional[Dict[str, List[MateriaSlotSelection]]] = None
                         resolved_meld_changes: Optional[int] = None
                         for food in candidate_foods:
                             exact_evaluated += 1
@@ -4597,26 +5072,34 @@ def optimize(
                             score, gcd = _evaluate_with_cache(combined_stats, food)
                             if not gcd_meets_constraints(gcd, gearset.target_gcd, gcd_constraint):
                                 continue
-                            if resolved_meld_map is None:
-                                resolved_meld_map = _meld_map_from_exact_node(meld_node)
-                                resolved_meld_changes = _meld_map_change_count(resolved_meld_map)
                             exact_kept += 1
                             extra_kept += 1
                             exact_seq += 1
-                            rank = (float(score), -int(resolved_meld_changes or 0))
+                            score_value = float(score)
+                            if (
+                                len(exact_heap) >= exact_result_limit
+                                and score_value < exact_heap[0][0]
+                            ):
+                                continue
+                            if resolved_meld_changes is None:
+                                resolved_meld_changes = _meld_node_change_count(meld_node)
+                            rank = (
+                                score_value,
+                                -int(resolved_meld_changes or 0),
+                                -float(gcd),
+                            )
                             if len(exact_heap) < exact_result_limit or rank > (
                                 exact_heap[0][0],
                                 exact_heap[0][1],
+                                exact_heap[0][2],
                             ):
-                                new_gearset = _build_candidate_gearset(
-                                    resolved_meld_map,
-                                    food,
-                                )
                                 heap_entry = (
                                     rank[0],
                                     rank[1],
+                                    rank[2],
                                     exact_seq,
-                                    new_gearset,
+                                    meld_node,
+                                    food,
                                     float(gcd),
                                 )
                             else:
@@ -4634,8 +5117,37 @@ def optimize(
                             f"extra_accepted={extra_kept}"
                         )
             if exact_heap:
-                exact_sorted = sorted(exact_heap, key=lambda x: (x[0], x[1]), reverse=True)
-                results.extend((gs, score, gcd) for score, _chg, _i, gs, gcd in exact_sorted)
+                exact_sorted = sorted(
+                    exact_heap,
+                    key=lambda entry: (
+                        entry[0],
+                        entry[1],
+                        entry[2],
+                        entry[3],
+                    ),
+                    reverse=True,
+                )
+                meld_map_cache: Dict[
+                    int,
+                    Dict[str, List[MateriaSlotSelection]],
+                ] = {}
+                for score, neg_changes, _neg_gcd, _seq, meld_node, food, gcd in exact_sorted:
+                    node_key = id(meld_node)
+                    meld_map = meld_map_cache.get(node_key)
+                    if meld_map is None:
+                        meld_map = _reconstruct_exact_meld_map(meld_node)
+                        meld_map_cache[node_key] = meld_map
+                    results.append(
+                        (
+                            _build_candidate_gearset(
+                                meld_map,
+                                food,
+                                -neg_changes,
+                            ),
+                            score,
+                            gcd,
+                        )
+                    )
             if debug_enabled:
                 sim_log(
                     f"[opt] exact_food_eval_done evaluated={exact_evaluated} accepted={exact_kept} "

@@ -13,7 +13,7 @@ def normalized_export_item_ids(raw_ids: Optional[dict], items_by_id: Dict[int, o
             continue
         try:
             item_id = int(raw_item_id or 0)
-        except Exception:
+        except (TypeError, ValueError, OverflowError):
             continue
         if item_id <= 0:
             continue
@@ -43,7 +43,7 @@ def duplicate_unique_ring_slot_for_export(
     other_override = export_ids.get(other_slot)
     try:
         other_item_id = int(other_override or 0)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         other_item_id = 0
     if other_item_id <= 0:
         other_sel = (gearset.items or {}).get(other_slot) or ItemSelection()

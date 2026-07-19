@@ -4,6 +4,7 @@ import copy
 import json
 import math
 import os
+import sys
 import time
 import re
 import uuid
@@ -60,6 +61,7 @@ import httpx
 
 from .cache import FileCache
 from .fflogs_client import FFLogsClient
+from .fflogs_event_cache import FFLogsEventCache
 from .gear_data_service import GearDataService
 from .gcd_analysis import LogGcdConstraint, LogGcdEstimate, build_log_gcd_constraint, estimate_log_gcd
 from .models import (
@@ -97,6 +99,15 @@ from .config_store import (
     save_auth,
     load_saved_sets,
     save_saved_sets,
+    load_update_settings,
+    save_update_settings,
+)
+from .update_manager import (
+    ReleaseInfo,
+    UpdateError,
+    check_for_update,
+    download_windows_update,
+    launch_windows_update,
 )
 from .paths import ensure_runtime_dirs, writable_cache_dir
 from . import APP_VERSION, optimizer, xivmath
@@ -525,6 +536,7 @@ class MainWindow(QMainWindow):
 
         self.cache = FileCache()
         self.report_cache = ReportCache(self.cache)
+        self.fflogs_event_cache = FFLogsEventCache(self.cache)
         self.xiv_client = XivGearClient(self.cache)
         self.gear_data_service = GearDataService(self.xiv_client)
         self.xivapi_client = XivApiClient(self.cache)
@@ -534,6 +546,11 @@ class MainWindow(QMainWindow):
         self.icon_thread_pool.setMaxThreadCount(4)
         self.active_worker: Optional[Worker] = None
         self._saved_stats_worker: Optional[Worker] = None
+        self._update_check_worker: Optional[Worker] = None
+        self._pending_update_release: Optional[ReleaseInfo] = None
+        self._update_prompt_timer = QTimer(self)
+        self._update_prompt_timer.setSingleShot(True)
+        self._update_prompt_timer.timeout.connect(self._show_pending_update_when_idle)
         self._fflogs_context_locked = False
         self._job_context_locked = False
         self._closing = False
@@ -631,6 +648,7 @@ class MainWindow(QMainWindow):
         self._simdps_baseline_entry_id: Optional[int] = None
         self._log_gcd_estimate: Optional[LogGcdEstimate] = None
         self._log_gcd_constraint: Optional[LogGcdConstraint] = None
+        self._log_gcd_dictionary_incomplete: set[int] = set()
         self._current_export_item_ids: Dict[str, int] = {}
         self._pending_saved_set_entry: Optional[dict] = None
         self._pending_saved_set_ui_context: Optional[dict] = None
@@ -652,6 +670,7 @@ class MainWindow(QMainWindow):
         self._load_cached_gear_data()
         self._refresh_saved_sets_table()
         QTimer.singleShot(0, self._ensure_initial_job_items_loaded)
+        QTimer.singleShot(2500, self._start_update_check)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -1320,6 +1339,178 @@ class MainWindow(QMainWindow):
             self._toggle_slot_item_exclusion(slot, [item_id], exclude=not is_excluded)
 
     # ---- Task helpers ----
+    def _start_update_check(self) -> None:
+        if self._closing or self._update_check_worker is not None:
+            return
+        try:
+            skipped_version = str(load_update_settings().get("skipped_version") or "")
+        except Exception:
+            logger.exception("Failed to load update settings")
+            return
+
+        def task(stop_event=None):
+            return check_for_update(
+                APP_VERSION,
+                skipped_version,
+                stop_event=stop_event,
+            )
+
+        worker = Worker(task)
+        self._update_check_worker = worker
+        worker.signals.finished.connect(
+            self._after_update_check,
+            Qt.QueuedConnection,
+        )
+        worker.signals.cancelled.connect(
+            self._after_update_check_cancelled,
+            Qt.QueuedConnection,
+        )
+        worker.signals.error.connect(
+            self._after_update_check_error,
+            Qt.QueuedConnection,
+        )
+        try:
+            self.thread_pool.start(worker)
+        except Exception:
+            self._update_check_worker = None
+            logger.exception("Failed to start update check")
+
+    def _after_update_check(self, release: object) -> None:
+        self._update_check_worker = None
+        if self._closing or not isinstance(release, ReleaseInfo):
+            return
+        self._pending_update_release = release
+        self._show_pending_update_when_idle()
+
+    def _after_update_check_cancelled(self) -> None:
+        self._update_check_worker = None
+
+    def _after_update_check_error(self, trace: str) -> None:
+        self._update_check_worker = None
+        logger.info("Update check failed without user notification: %s", trace)
+
+    def _show_pending_update_when_idle(self) -> None:
+        if self._closing or self._pending_update_release is None:
+            return
+        if self.active_worker or self._is_populating or QApplication.activeModalWidget() is not None:
+            self._update_prompt_timer.start(1500)
+            return
+        release = self._pending_update_release
+        self._pending_update_release = None
+        try:
+            skipped_version = str(load_update_settings().get("skipped_version") or "")
+        except Exception:
+            logger.exception("Failed to reload update settings")
+            return
+        if skipped_version == release.version:
+            return
+        self._show_update_dialog(release)
+
+    def _show_update_dialog(self, release: ReleaseInfo) -> None:
+        frozen = bool(getattr(sys, "frozen", False))
+        can_auto_update = bool(
+            frozen
+            and release.windows_asset is not None
+            and release.windows_asset.sha256
+        )
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Information)
+        dialog.setWindowTitle("アップデートがあります")
+        dialog.setText(
+            f"GearSimulator v{release.version} が利用できます。\n"
+            f"現在のバージョン: v{APP_VERSION}\n\n"
+            "アップデートしますか？"
+        )
+        if release.notes.strip():
+            dialog.setDetailedText(release.notes.strip()[:8000])
+        skip_checkbox = QCheckBox(
+            "このバージョンのアップデート通知は表示しない",
+            dialog,
+        )
+        dialog.setCheckBox(skip_checkbox)
+        update_button = dialog.addButton(
+            "アップデート" if can_auto_update else "リリースページを開く",
+            QMessageBox.AcceptRole,
+        )
+        later_button = dialog.addButton("後で", QMessageBox.RejectRole)
+        dialog.setDefaultButton(update_button)
+        dialog.setEscapeButton(later_button)
+        dialog.exec()
+
+        if dialog.clickedButton() is update_button:
+            if can_auto_update:
+                self._start_windows_update_download(release)
+            else:
+                QDesktopServices.openUrl(QUrl(release.html_url))
+            return
+        if skip_checkbox.isChecked():
+            try:
+                save_update_settings({"skipped_version": release.version})
+            except Exception:
+                logger.exception("Failed to save skipped update version")
+                QMessageBox.warning(
+                    self,
+                    "設定保存失敗",
+                    "アップデート通知の設定を保存できませんでした。",
+                )
+
+    def _start_windows_update_download(self, release: ReleaseInfo) -> None:
+        asset = release.windows_asset
+        if asset is None or not asset.sha256:
+            QDesktopServices.openUrl(QUrl(release.html_url))
+            return
+
+        def task(progress=None, stop_event=None):
+            try:
+                path = download_windows_update(
+                    asset,
+                    progress=progress,
+                    stop_event=stop_event,
+                )
+            except UpdateError as exc:
+                return {"error": str(exc)}
+            return {"path": str(path), "sha256": asset.sha256}
+
+        if self.start_worker(task, self._after_windows_update_download):
+            self.update_progress(0, "アップデートを準備しています...")
+
+    def _after_windows_update_download(self, result: object) -> None:
+        payload = result if isinstance(result, dict) else {}
+        error = str(payload.get("error") or "")
+        if error:
+            QMessageBox.warning(self, "アップデート失敗", error)
+            self.update_progress(0, "待機中")
+            return
+        if not bool(getattr(sys, "frozen", False)):
+            logger.error("Refused to replace the Python interpreter in source mode")
+            QMessageBox.warning(
+                self,
+                "アップデート失敗",
+                "ソース実行中は自動差し替えできません。",
+            )
+            self.update_progress(0, "待機中")
+            return
+        package_path = Path(str(payload.get("path") or ""))
+        try:
+            launch_windows_update(
+                package_path,
+                Path(sys.executable),
+                os.getpid(),
+                str(payload.get("sha256") or ""),
+            )
+        except Exception as exc:
+            logger.exception("Failed to launch updater")
+            QMessageBox.warning(
+                self,
+                "アップデート失敗",
+                f"更新処理を開始できませんでした。\n{type(exc).__name__}: {exc}",
+            )
+            self.update_progress(0, "待機中")
+            return
+        self.progress_label.setText("アップデートを適用するため再起動します...")
+        self._closing = True
+        QTimer.singleShot(0, self.close)
+
     def start_worker(
         self,
         fn,
@@ -1405,6 +1596,8 @@ class MainWindow(QMainWindow):
         finally:
             self._unlock_fflogs_context()
             self._unlock_job_context()
+        if self._closing:
+            return
         if callback_error is not None:
             self.on_worker_error(callback_error)
             return
@@ -3733,7 +3926,7 @@ class MainWindow(QMainWindow):
                 return [parsed]
             if isinstance(parsed, list):
                 return [obj for obj in parsed if isinstance(obj, dict)]
-        except Exception:
+        except json.JSONDecodeError:
             pass
         decoder = json.JSONDecoder()
         idx = 0
@@ -5389,7 +5582,8 @@ class MainWindow(QMainWindow):
         if not code:
             QMessageBox.warning(self, "入力不正", "FFLogsレポートコードまたはURLを正しく入力してください。")
             return
-        if self._fflogs_force_refresh_enabled():
+        force_fflogs_refresh = self._fflogs_force_refresh_enabled()
+        if force_fflogs_refresh:
             self.ff_client.clear_cache()
         fight = dict(self.selected_fight)
         actor = dict(self.selected_actor)
@@ -5406,11 +5600,12 @@ class MainWindow(QMainWindow):
         baseline_party = self.party_bonus.value()
         baseline_race = self._current_race()
         baseline_entry = self._find_simdps_baseline_entry(code, fight_id, actor_id)
-        self._simdps_baseline_exact = baseline_entry is not None
-        self._simdps_baseline_name = str(baseline_entry.get("name") or "") if baseline_entry else None
-        self._simdps_baseline_entry_id = baseline_entry.get("id") if baseline_entry else None
+        self._simdps_baseline_exact = False
+        self._simdps_baseline_name = None
+        self._simdps_baseline_entry_id = None
         self._log_gcd_estimate = None
         self._log_gcd_constraint = None
+        self._log_gcd_dictionary_incomplete = set()
         self._refresh_log_gcd_ui()
         if baseline_entry:
             try:
@@ -5419,12 +5614,15 @@ class MainWindow(QMainWindow):
                     baseline_source = candidate
                     baseline_party = int(baseline_entry.get("party_bonus", baseline_party))
                     baseline_race = candidate.race or baseline_race
+                    self._simdps_baseline_exact = True
+                    self._simdps_baseline_name = str(baseline_entry.get("name") or "")
+                    self._simdps_baseline_entry_id = baseline_entry.get("id")
                     sim_log(
                         f"[simdps] baseline_source=saved_set name={baseline_entry.get('name')} "
                         f"weapon={baseline_entry.get('gearset', {}).get('items', {}).get('weapon', {}).get('item_id')}"
                     )
             except Exception:
-                pass
+                logger.exception("Failed to restore the saved FFLogs baseline gearset")
         self._simdps_baseline_gearset = Gearset.from_dict(baseline_source.to_dict())
         self._simdps_baseline_raw_stats = None
         self._simdps_baseline_items = None
@@ -5456,7 +5654,10 @@ class MainWindow(QMainWindow):
                         "[simdps] baseline capture deferred: baseline source has no selected items"
                     )
         except Exception:
-            pass
+            logger.exception("Failed to capture the FFLogs baseline gearset")
+            self._simdps_baseline_exact = False
+            self._simdps_baseline_name = None
+            self._simdps_baseline_entry_id = None
 
         def task(progress=None, stop_event=None):
             sim_log(
@@ -5491,36 +5692,55 @@ class MainWindow(QMainWindow):
                     enemy_npcs = enemy_npcs_snapshot
             if progress:
                 progress(-1, "ログ取得中...")
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                fut_casts = executor.submit(
-                    self.ff_client.fetch_casts,
+            cached_events = None
+            event_cache_needs_save = False
+            if not force_fflogs_refresh:
+                cached_events = self.fflogs_event_cache.load(
                     code,
-                    fight,
+                    fight_id,
                     actor_id,
-                    stop_event,
-                    None,
+                    include_pets=True,
                 )
-                fut_timeline = executor.submit(
-                    self.ff_client.fetch_actor_timeline_events,
-                    code,
-                    fight,
-                    actor_id,
-                    True,
-                    stop_event,
-                    None,
+            if cached_events is not None:
+                casts = list(cached_events.get("casts") or [])
+                timeline_events = list(cached_events.get("timeline") or [])
+                damage = list(cached_events.get("damage") or [])
+                sim_log(
+                    f"[flow] event_cache_hit casts={len(casts)} "
+                    f"timeline={len(timeline_events)} damage={len(damage)}"
                 )
-                fut_damage = executor.submit(
-                    self.ff_client.fetch_damage_events,
-                    code,
-                    fight,
-                    actor_id,
-                    True,
-                    stop_event,
-                    None,
-                )
-                casts = fut_casts.result()
-                timeline_events = fut_timeline.result()
-                damage = fut_damage.result()
+            else:
+                event_cache_needs_save = True
+                with ThreadPoolExecutor(max_workers=3) as executor:
+                    fut_casts = executor.submit(
+                        self.ff_client.fetch_casts,
+                        code,
+                        fight,
+                        actor_id,
+                        stop_event,
+                        None,
+                    )
+                    fut_timeline = executor.submit(
+                        self.ff_client.fetch_actor_timeline_events,
+                        code,
+                        fight,
+                        actor_id,
+                        True,
+                        stop_event,
+                        None,
+                    )
+                    fut_damage = executor.submit(
+                        self.ff_client.fetch_damage_events,
+                        code,
+                        fight,
+                        actor_id,
+                        True,
+                        stop_event,
+                        None,
+                    )
+                    casts = fut_casts.result()
+                    timeline_events = fut_timeline.result()
+                    damage = fut_damage.result()
             sim_log(
                 f"[flow] fetch_done casts={len(casts)} timeline={len(timeline_events)} damage={len(damage)}"
             )
@@ -5529,37 +5749,85 @@ class MainWindow(QMainWindow):
             damage_filtered = filter_damage_local(damage)
             damage_table = None
             damage_table_adps = None
+            table_key = self.fflogs_event_cache.table_key(start_time, end_time)
+            cached_tables = (
+                cached_events.get("tables")
+                if isinstance(cached_events, dict)
+                else None
+            )
+            cached_table_entry = (
+                cached_tables.get(table_key)
+                if isinstance(cached_tables, dict)
+                else None
+            )
+            if isinstance(cached_table_entry, dict):
+                cached_summary = cached_table_entry.get("summary")
+                cached_adps = cached_table_entry.get("adps")
+                if isinstance(cached_summary, dict) and isinstance(cached_adps, dict):
+                    damage_table = cached_summary
+                    damage_table_adps = cached_adps
+                    sim_log(f"[flow] table_cache_hit window={table_key}")
             if fight_id is not None:
+                if damage_table is None or damage_table_adps is None:
+                    try:
+                        # Use raid table (contains per-actor NDPS/RDPS rows) to avoid per-ability rows.
+                        with ThreadPoolExecutor(max_workers=2) as table_exec:
+                            fut_summary = table_exec.submit(
+                                self.ff_client.fetch_damage_done_table,
+                                code,
+                                fight_id,
+                                None,
+                                start_time,
+                                end_time,
+                                "summary",
+                            )
+                            fut_adps = table_exec.submit(
+                                self.ff_client.fetch_damage_done_table,
+                                code,
+                                fight_id,
+                                None,
+                                start_time,
+                                end_time,
+                                "adps",
+                            )
+                            damage_table = {"raid": fut_summary.result()}
+                            damage_table_adps = {"raid": fut_adps.result()}
+                            event_cache_needs_save = True
+                    except Exception as e:
+                        damage_table = {"error": str(e)}
+            if event_cache_needs_save and not (stop_event and stop_event.is_set()):
                 try:
-                    # Use raid table (contains per-actor NDPS/RDPS rows) to avoid per-ability rows.
-                    with ThreadPoolExecutor(max_workers=2) as table_exec:
-                        fut_summary = table_exec.submit(
-                            self.ff_client.fetch_damage_done_table,
-                            code,
-                            fight_id,
-                            None,
-                            start_time,
-                            end_time,
-                            "summary",
-                        )
-                        fut_adps = table_exec.submit(
-                            self.ff_client.fetch_damage_done_table,
-                            code,
-                            fight_id,
-                            None,
-                            start_time,
-                            end_time,
-                            "adps",
-                        )
-                        damage_table = {"raid": fut_summary.result()}
-                        damage_table_adps = {"raid": fut_adps.result()}
-                except Exception as e:
-                    damage_table = {"error": str(e)}
+                    self.fflogs_event_cache.save(
+                        code,
+                        fight_id,
+                        actor_id,
+                        casts=casts,
+                        timeline=timeline_events,
+                        damage=damage,
+                        include_pets=True,
+                        start_time=start_time,
+                        end_time=end_time,
+                        damage_table=(
+                            damage_table
+                            if isinstance(damage_table, dict)
+                            and "error" not in damage_table
+                            else None
+                        ),
+                        damage_table_adps=(
+                            damage_table_adps
+                            if isinstance(damage_table_adps, dict)
+                            else None
+                        ),
+                        replace_tables=force_fflogs_refresh,
+                    )
+                except (OSError, TypeError, ValueError):
+                    logger.exception("Failed to save FFLogs event cache")
             sim_log(
                 f"[flow] table_fetch done raid={'yes' if damage_table else 'no'} adps={'yes' if damage_table_adps else 'no'}"
             )
             action_data: Dict[int, object] = {}
             status_data: Dict[int, object] = {}
+            transient_action_failures: set[int] = set()
             if damage_table_adps and isinstance(damage_table_adps, dict):
                 table_for_ids = None
                 if isinstance(damage_table_adps.get("actor"), dict):
@@ -5570,6 +5838,8 @@ class MainWindow(QMainWindow):
                     action_ids = self._extract_action_ids_from_table(table_for_ids)
                     if action_ids:
                         action_data.update(self.xivapi_client.fetch_actions(action_ids))
+                        transient, _not_found = self.xivapi_client.last_action_fetch_failures()
+                        transient_action_failures.update(transient)
             event_action_ids = self._extract_action_ids_from_events(casts, timeline_events, damage_filtered)
             status_ids = self._extract_status_ids_from_timeline(timeline_events)
             missing = [aid for aid in event_action_ids if aid not in action_data] if event_action_ids else []
@@ -5589,8 +5859,14 @@ class MainWindow(QMainWindow):
                     )
                     if fut_actions:
                         action_data.update(fut_actions.result() or {})
+                        transient, _not_found = self.xivapi_client.last_action_fetch_failures()
+                        transient_action_failures.update(transient)
                     if fut_status:
                         status_data.update(fut_status.result() or {})
+            cast_action_ids = set(self._extract_action_ids_from_events(casts, [], []))
+            incomplete_cast_action_ids = sorted(
+                cast_action_ids.intersection(transient_action_failures)
+            )
             if action_data:
                 sample_actions = list(action_data.keys())[:10]
                 sim_log(
@@ -5636,6 +5912,7 @@ class MainWindow(QMainWindow):
                 "damage_table_adps": damage_table_adps,
                 "action_data": action_data,
                 "status_data": status_data,
+                "incomplete_cast_action_ids": incomplete_cast_action_ids,
                 "enemy_npcs": enemy_npcs,
                 "request_context": {
                     "report_code": code,
@@ -5674,6 +5951,9 @@ class MainWindow(QMainWindow):
                 self.action_data = payload.get("action_data") or {}
             if "status_data" in payload:
                 self.status_data = payload.get("status_data") or {}
+            self._log_gcd_dictionary_incomplete = set(
+                payload.get("incomplete_cast_action_ids") or []
+            )
         self.casts = casts or []
         self.timeline_events = timeline or []
         enemy_npcs = payload.get("enemy_npcs") if isinstance(payload, dict) else None
@@ -6070,6 +6350,8 @@ class MainWindow(QMainWindow):
             self._log_gcd_estimate,
             baseline_gcd,
         )
+        if self._log_gcd_dictionary_incomplete:
+            self._log_gcd_constraint = None
         self._refresh_log_gcd_ui()
         estimate = self._log_gcd_estimate
         sim_log(
@@ -6104,6 +6386,11 @@ class MainWindow(QMainWindow):
             )
         elif not self._simdps_baseline_exact:
             tooltip = "ログ識別子が一致する保存セットを右クリックし、ログ基準装備に設定してください"
+        elif self._log_gcd_dictionary_incomplete:
+            tooltip = (
+                "XIVAPI辞書の一部を取得できなかったため、ログGCD固定を無効にしました。"
+                "次回のログ取得時に再試行します"
+            )
         else:
             tooltip = estimate.reason or "実測GCDの信頼度または基準値との比率が不足しています"
         if estimate.raw_median_ms is not None:
@@ -6997,27 +7284,31 @@ class MainWindow(QMainWindow):
         ids = []
 
         def _add_from_event(ev: dict) -> None:
-            ability = ev.get("ability") or {}
+            ability = ev.get("ability") if isinstance(ev.get("ability"), dict) else {}
             candidates = [
                 ability.get("gameID"),
-                ability.get("guid"),
-                ability.get("id"),
                 ev.get("abilityGameID"),
+                ability.get("guid"),
                 ev.get("abilityGuid"),
+                ability.get("id"),
                 ev.get("abilityID"),
             ]
             for raw in candidates:
                 if not raw:
                     continue
                 try:
-                    ids.append(int(raw))
-                except Exception:
+                    action_id = int(raw)
+                except (TypeError, ValueError, OverflowError):
                     continue
+                if action_id > 0:
+                    ids.append(action_id)
+                    return
 
         for ev in casts or []:
             _add_from_event(ev)
         for ev in timeline or []:
-            _add_from_event(ev)
+            if str(ev.get("type") or "").lower() in {"cast", "begincast"}:
+                _add_from_event(ev)
         for ev in damage or []:
             _add_from_event(ev)
         return sorted(set(ids))
@@ -7037,24 +7328,27 @@ class MainWindow(QMainWindow):
         }
         ids = []
         for ev in events:
-            if ev.get("type") not in keep_types:
+            if str(ev.get("type") or "").lower() not in keep_types:
                 continue
-            ability = ev.get("ability") or {}
+            ability = ev.get("ability") if isinstance(ev.get("ability"), dict) else {}
             candidates = [
                 ability.get("gameID"),
-                ability.get("guid"),
-                ability.get("id"),
                 ev.get("abilityGameID"),
+                ability.get("guid"),
                 ev.get("abilityGuid"),
+                ability.get("id"),
                 ev.get("abilityID"),
             ]
             for raw in candidates:
                 if not raw:
                     continue
                 try:
-                    ids.append(int(raw))
-                except Exception:
+                    status_id = int(raw)
+                except (TypeError, ValueError, OverflowError):
                     continue
+                if status_id > 0:
+                    ids.append(status_id)
+                    break
         return sorted(set(ids))
 
     def _sorted_relic_stat_ids(
@@ -7676,8 +7970,8 @@ class MainWindow(QMainWindow):
                 try:
                     if path.exists():
                         path.unlink()
-                except Exception:
-                    pass
+                except OSError:
+                    logger.warning("Failed to remove invalid icon cache file %s", path)
                 self._on_icon_failed(url)
                 return
             icon = QIcon(pixmap)
@@ -10759,10 +11053,14 @@ class MainWindow(QMainWindow):
         return mods
 
     def _shutdown_background_tasks(self) -> bool:
+        self._update_prompt_timer.stop()
+        self._pending_update_release = None
         if self.active_worker:
             self.active_worker.cancel()
         if self._saved_stats_worker:
             self._saved_stats_worker.cancel()
+        if self._update_check_worker:
+            self._update_check_worker.cancel()
         for worker in list(self._icon_workers.values()):
             worker.cancel()
         deadline = time.monotonic() + 30.0

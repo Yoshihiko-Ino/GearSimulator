@@ -1,24 +1,40 @@
 import base64
+import binascii
 import json
+import logging
 import os
+import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .paths import ensure_runtime_dirs, writable_config_dir
 
 CONFIG_DIR = writable_config_dir()
 AUTH_PATH = CONFIG_DIR / "auth.json"
 SAVED_SETS_PATH = CONFIG_DIR / "saved_sets.json"
+UPDATE_SETTINGS_PATH = CONFIG_DIR / "update.json"
 DEFAULT_AUTH: Dict[str, Any] = {}
 DEFAULT_SAVED_SETS: Dict[str, Any] = {"version": 1, "items": []}
+DEFAULT_UPDATE_SETTINGS: Dict[str, Any] = {}
+logger = logging.getLogger(__name__)
 
 _CONFIG_WARNINGS: List[str] = []
 _MIGRATED_CONFIG_DIRS: set[Path] = set()
 _AUTH_SECRET_KEY = "client_secret"
 _AUTH_SECRET_ENCRYPTED_KEY = "client_secret_encrypted"
 _MIGRATION_VERSION = 1
+_UPDATE_VERSION_PATTERN = re.compile(r"^v?(\d{1,9})\.(\d{1,9})\.(\d{1,9})$", re.IGNORECASE)
+
+
+def _normalize_update_version(value: object) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    match = _UPDATE_VERSION_PATTERN.fullmatch(value.strip())
+    if not match:
+        return None
+    return ".".join(str(int(part)) for part in match.groups())
 
 
 def _write_json(path: Path, data: Dict[str, Any]) -> None:
@@ -43,8 +59,8 @@ def _write_json(path: Path, data: Dict[str, Any]) -> None:
             try:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
-            except Exception:
-                pass
+            except OSError:
+                logger.warning("Failed to remove temporary config file %s", temp_path)
 
 
 def _record_warning(message: str) -> None:
@@ -202,11 +218,12 @@ if os.name == "nt":
         ]
 
 
-    def _blob_from_bytes(data: bytes) -> "_DataBlob":
+    def _blob_from_bytes(data: bytes) -> Tuple["_DataBlob", Optional[Any]]:
         if not data:
-            return _DataBlob(0, None)
+            return _DataBlob(0, None), None
         buffer = ctypes.create_string_buffer(data)
-        return _DataBlob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_byte)))
+        blob = _DataBlob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_byte)))
+        return blob, buffer
 
 
     def _bytes_from_blob(blob: "_DataBlob") -> bytes:
@@ -218,7 +235,7 @@ if os.name == "nt":
     def _dpapi_protect(data: bytes) -> Optional[bytes]:
         crypt32 = ctypes.windll.crypt32
         kernel32 = ctypes.windll.kernel32
-        in_blob = _blob_from_bytes(data)
+        in_blob, input_buffer = _blob_from_bytes(data)
         out_blob = _DataBlob()
         if not crypt32.CryptProtectData(
             ctypes.byref(in_blob),
@@ -230,6 +247,7 @@ if os.name == "nt":
             ctypes.byref(out_blob),
         ):
             return None
+        del input_buffer
         try:
             return _bytes_from_blob(out_blob)
         finally:
@@ -240,7 +258,7 @@ if os.name == "nt":
     def _dpapi_unprotect(data: bytes) -> Optional[bytes]:
         crypt32 = ctypes.windll.crypt32
         kernel32 = ctypes.windll.kernel32
-        in_blob = _blob_from_bytes(data)
+        in_blob, input_buffer = _blob_from_bytes(data)
         out_blob = _DataBlob()
         if not crypt32.CryptUnprotectData(
             ctypes.byref(in_blob),
@@ -252,6 +270,7 @@ if os.name == "nt":
             ctypes.byref(out_blob),
         ):
             return None
+        del input_buffer
         try:
             return _bytes_from_blob(out_blob)
         finally:
@@ -281,8 +300,8 @@ def _decode_client_secret(data: Dict[str, Any]) -> str:
     encrypted = data.get(_AUTH_SECRET_ENCRYPTED_KEY)
     if isinstance(encrypted, str) and encrypted:
         try:
-            raw = base64.b64decode(encrypted.encode("ascii"))
-        except Exception:
+            raw = base64.b64decode(encrypted.encode("ascii"), validate=True)
+        except (UnicodeEncodeError, ValueError, binascii.Error):
             _record_warning("auth.json の暗号化された client_secret を復号できませんでした。")
             return ""
         decrypted = _dpapi_unprotect(raw)
@@ -291,7 +310,7 @@ def _decode_client_secret(data: Dict[str, Any]) -> str:
             return ""
         try:
             return decrypted.decode("utf-8")
-        except Exception:
+        except UnicodeDecodeError:
             _record_warning("auth.json の暗号化された client_secret の文字コードが不正です。")
             return ""
     legacy = data.get(_AUTH_SECRET_KEY)
@@ -305,6 +324,8 @@ def ensure_config_files() -> None:
         _write_json(AUTH_PATH, DEFAULT_AUTH)
     if not SAVED_SETS_PATH.exists():
         _write_json(SAVED_SETS_PATH, DEFAULT_SAVED_SETS)
+    if not UPDATE_SETTINGS_PATH.exists():
+        _write_json(UPDATE_SETTINGS_PATH, DEFAULT_UPDATE_SETTINGS)
 
 
 def load_auth() -> Dict[str, Any]:
@@ -341,7 +362,7 @@ def load_saved_sets() -> Dict[str, Any]:
     version = loaded.get("version")
     try:
         version_value = int(version) if version is not None else 1
-    except Exception:
+    except (TypeError, ValueError):
         version_value = 1
     items = loaded.get("items")
     if items is None:
@@ -361,6 +382,39 @@ def save_saved_sets(data: Dict[str, Any]) -> None:
     payload["items"] = items
     try:
         payload["version"] = int(payload.get("version", 1) or 1)
-    except Exception:
+    except (TypeError, ValueError):
         payload["version"] = 1
     _write_json(SAVED_SETS_PATH, payload)
+
+
+def load_update_settings() -> Dict[str, Any]:
+    loaded = _load_json_file(UPDATE_SETTINGS_PATH, label="update.json")
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        _backup_corrupt_file(
+            UPDATE_SETTINGS_PATH,
+            "update.json",
+            TypeError("update settings must be object"),
+        )
+        return {}
+    raw_version = loaded.get("skipped_version")
+    if raw_version in (None, ""):
+        return {}
+    skipped_version = _normalize_update_version(raw_version)
+    if skipped_version is None:
+        _record_warning("update.json の skipped_version が不正なため無視しました。")
+        return {}
+    return {"skipped_version": skipped_version}
+
+
+def save_update_settings(data: Dict[str, Any]) -> None:
+    raw_version = (data or {}).get("skipped_version")
+    if raw_version in (None, ""):
+        payload = {}
+    else:
+        skipped_version = _normalize_update_version(raw_version)
+        if skipped_version is None:
+            raise ValueError("skipped_version must be a stable x.y.z version")
+        payload = {"skipped_version": skipped_version}
+    _write_json(UPDATE_SETTINGS_PATH, payload)

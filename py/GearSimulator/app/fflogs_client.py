@@ -11,6 +11,38 @@ BASE_URL_V2 = "https://www.fflogs.com/api/v2/client"
 OAUTH_TOKEN_URL = "https://www.fflogs.com/oauth/token"
 
 
+def _report_from_graphql(data: dict) -> dict:
+    graph_data = data.get("data")
+    if not isinstance(graph_data, dict):
+        raise RuntimeError("FFLogs API のdata形式が不正です。")
+    report_data = graph_data.get("reportData")
+    if not isinstance(report_data, dict):
+        raise RuntimeError("FFLogs API のreportData形式が不正です。")
+    report = report_data.get("report")
+    if report is None:
+        return {}
+    if not isinstance(report, dict):
+        raise RuntimeError("FFLogs API のreport形式が不正です。")
+    return report
+
+
+class FFLogsGraphQLError(RuntimeError):
+    """GraphQL query errors that may be recoverable with a schema variant."""
+
+    _SCHEMA_ERROR_MARKERS = (
+        "cannot query field",
+        "unknown argument",
+        "unknown type",
+        "expected type",
+        "used in position expecting type",
+    )
+
+    @property
+    def is_schema_compatibility_error(self) -> bool:
+        message = str(self).lower()
+        return any(marker in message for marker in self._SCHEMA_ERROR_MARKERS)
+
+
 class FFLogsClient:
     def __init__(self, client_id: Optional[str] = None, client_secret: Optional[str] = None) -> None:
         self.client_id = client_id
@@ -19,7 +51,6 @@ class FFLogsClient:
         self._token_lock = threading.RLock()
         self._cache_lock = threading.RLock()
         self.last_enemy_npcs: List[dict] = []
-        self.last_friendlies: List[dict] = []
         self._access_token: Optional[str] = None
         self._token_expires_at: float = 0.0
         # Session-level response cache to avoid repeated network calls for same query.
@@ -37,7 +68,7 @@ class FFLogsClient:
             if value is None:
                 return None
             return int(value)
-        except Exception:
+        except (TypeError, ValueError, OverflowError):
             return None
 
     def ready(self) -> bool:
@@ -79,6 +110,12 @@ class FFLogsClient:
             self._response_cache.clear()
             self._response_cache_order.clear()
 
+    def _invalidate_access_token(self, token: str) -> None:
+        with self._token_lock:
+            if self._access_token == token:
+                self._access_token = None
+                self._token_expires_at = 0.0
+
     def _ensure_token(self) -> str:
         with self._token_lock:
             if not self.client_id or not self.client_secret:
@@ -102,10 +139,16 @@ class FFLogsClient:
                 raise RuntimeError(
                     f"FFLogs OAuth エラー (HTTP {status})。クライアントID/シークレットを確認してください。"
                 ) from e
-            data = resp.json()
+            try:
+                data = resp.json()
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("FFLogs OAuth の応答を解析できませんでした。") from exc
+            if not isinstance(data, dict):
+                raise RuntimeError("FFLogs OAuth の応答形式が不正です。")
             token = data.get("access_token")
-            if not token:
+            if not isinstance(token, str) or not token.strip():
                 raise RuntimeError("FFLogs OAuth のトークン取得に失敗しました。")
+            token = token.strip()
             expires_in = data.get("expires_in")
             self._access_token = token
             if isinstance(expires_in, (int, float)) and expires_in > 0:
@@ -116,30 +159,39 @@ class FFLogsClient:
             return token
 
     def _post_graphql(self, query: str, variables: dict, use_cache: bool = True) -> dict:
-        token = self._ensure_token()
         key = self._cache_key(query, variables)
         if use_cache:
             with self._cache_lock:
                 cached = self._response_cache.get(key)
             if cached is not None:
                 return cached
-        resp = self._client.post(
-            BASE_URL_V2,
-            headers={"Authorization": f"Bearer {token}"},
-            json={"query": query, "variables": variables},
-        )
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            raise RuntimeError(
-                f"FFLogs API エラー (HTTP {status})。クライアント情報やレポートコードを確認してください。"
-            ) from e
-        data = resp.json()
+        data = None
+        for attempt in range(2):
+            token = self._ensure_token()
+            resp = self._client.post(
+                BASE_URL_V2,
+                headers={"Authorization": f"Bearer {token}"},
+                json={"query": query, "variables": variables},
+            )
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                if status == 401 and attempt == 0:
+                    self._invalidate_access_token(token)
+                    continue
+                raise RuntimeError(
+                    f"FFLogs API エラー (HTTP {status})。クライアント情報やレポートコードを確認してください。"
+                ) from e
+            try:
+                data = resp.json()
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("FFLogs API の応答を解析できませんでした。") from exc
+            break
         if not isinstance(data, dict):
             raise RuntimeError("FFLogs API 応答が不正です。")
         if data.get("errors"):
-            raise RuntimeError(str(data.get("errors")))
+            raise FFLogsGraphQLError(str(data.get("errors")))
         if use_cache:
             with self._cache_lock:
                 if key not in self._response_cache:
@@ -195,24 +247,28 @@ class FFLogsClient:
             try:
                 data = self._post_graphql(query, {"code": report_code})
                 break
-            except RuntimeError as e:
+            except FFLogsGraphQLError as e:
+                if not e.is_schema_compatibility_error:
+                    raise
                 last_error = e
                 continue
         if data is None:
             if last_error:
                 raise last_error
             return []
-        report = ((data.get("data") or {}).get("reportData") or {}).get("report") or {}
+        report = _report_from_graphql(data)
         # V2 fights query no longer includes friendlies/enemies; keep empty defaults here.
         self.last_enemy_npcs = []
         fights = report.get("fights") or []
+        if not isinstance(fights, list):
+            raise RuntimeError("FFLogs API のfight一覧形式が不正です。")
         self._fight_friendly_ids = {}
         for fight in fights:
             if not isinstance(fight, dict):
                 continue
             try:
                 fid = int(fight.get("id"))
-            except Exception:
+            except (TypeError, ValueError, OverflowError):
                 continue
             ids = fight.get("friendlyPlayers") or []
             if isinstance(ids, list) and ids:
@@ -282,14 +338,16 @@ class FFLogsClient:
             try:
                 data = self._post_graphql(query, variables)
                 break
-            except RuntimeError as e:
+            except FFLogsGraphQLError as e:
+                if not e.is_schema_compatibility_error:
+                    raise
                 last_error = e
                 continue
         if data is None:
             if last_error:
                 raise last_error
             return {}
-        report = ((data.get("data") or {}).get("reportData") or {}).get("report") or {}
+        report = _report_from_graphql(data)
         phases = report.get("phases") or {}
         if isinstance(phases, list):
             if encounter_id is not None:
@@ -374,14 +432,16 @@ class FFLogsClient:
             try:
                 data = self._post_graphql(query, variables)
                 break
-            except RuntimeError as e:
+            except FFLogsGraphQLError as e:
+                if not e.is_schema_compatibility_error:
+                    raise
                 last_error = e
                 continue
         if data is None:
             if last_error:
                 raise last_error
             return []
-        report = ((data.get("data") or {}).get("reportData") or {}).get("report") or {}
+        report = _report_from_graphql(data)
         friendly_ids = {self._norm_int(v) for v in (report.get("friendlyPlayers") or [])}
         friendly_ids.discard(None)
         if not friendly_ids:
@@ -403,6 +463,9 @@ class FFLogsClient:
             actors = actors_raw.get("data") or actors_raw.get("entries") or []
         else:
             actors = actors_raw
+        if not isinstance(actors, list):
+            actors = []
+        actors = [actor for actor in actors if isinstance(actor, dict)]
         if friendly_ids:
             actors = [a for a in actors if self._norm_int(a.get("id")) in friendly_ids]
             if not actors:
@@ -411,7 +474,9 @@ class FFLogsClient:
                     actors = actors_raw.get("data") or actors_raw.get("entries") or []
                 else:
                     actors = actors_raw
-        self.last_friendlies = actors
+                if not isinstance(actors, list):
+                    actors = []
+                actors = [actor for actor in actors if isinstance(actor, dict)]
         return actors or []
 
     def _fetch_events(
@@ -480,7 +545,7 @@ class FFLogsClient:
             query = query_enum if use_enum else query_str
             try:
                 data = self._post_graphql(query, variables)
-            except RuntimeError as e:
+            except FFLogsGraphQLError as e:
                 if use_enum and ("EventDataType" in str(e) or "dataType" in str(e)):
                     use_enum = False
                     data = self._post_graphql(query_str, variables)
@@ -715,14 +780,16 @@ class FFLogsClient:
                 data = self._post_graphql(query, variables)
                 used_variant = variant_name
                 break
-            except RuntimeError as e:
+            except FFLogsGraphQLError as e:
+                if not e.is_schema_compatibility_error:
+                    raise
                 last_error = e
                 continue
         if data is None:
             if last_error:
                 raise last_error
             return {}
-        report = ((data.get("data") or {}).get("reportData") or {}).get("report") or {}
+        report = _report_from_graphql(data)
         table = report.get("table")
         if not isinstance(table, dict):
             return {}

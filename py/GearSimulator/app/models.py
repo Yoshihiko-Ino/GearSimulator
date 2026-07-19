@@ -42,7 +42,7 @@ RELIC_STAT_NAME_TO_ID = {
 def _coerce_int(value: object, *, minimum: Optional[int] = None) -> Optional[int]:
     try:
         coerced = int(value)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return None
     if minimum is not None and coerced < minimum:
         return None
@@ -52,7 +52,7 @@ def _coerce_int(value: object, *, minimum: Optional[int] = None) -> Optional[int
 def _coerce_float(value: object) -> Optional[float]:
     try:
         return float(value)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -225,11 +225,11 @@ class Gearset:
                 for raw_stat_id, raw_value in raw_relic_stats.items():
                     try:
                         stat_id = int(raw_stat_id)
-                    except Exception:
+                    except (TypeError, ValueError, OverflowError):
                         stat_id = RELIC_STAT_NAME_TO_ID.get(str(raw_stat_id or "").strip().lower(), 0)
                     try:
                         stat_value = int(raw_value or 0)
-                    except Exception:
+                    except (TypeError, ValueError, OverflowError):
                         continue
                     if stat_id <= 0 or stat_value <= 0:
                         continue

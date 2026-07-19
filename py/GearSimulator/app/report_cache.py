@@ -8,6 +8,7 @@ from .report_utils import extract_report_code
 
 
 DEFAULT_REPORT_CACHE_TTL_SECONDS = 15 * 60
+MAX_FUTURE_CLOCK_SKEW_SECONDS = 5 * 60
 
 
 class ReportCache:
@@ -55,7 +56,12 @@ class ReportCache:
                 saved_at = float(raw_timestamp or 0.0)
             except (TypeError, ValueError):
                 return None
-            if saved_at <= 0 or now - saved_at > self.ttl_seconds:
+            age = now - saved_at
+            if (
+                saved_at <= 0
+                or age < -MAX_FUTURE_CLOCK_SKEW_SECONDS
+                or age > self.ttl_seconds
+            ):
                 return None
         return data
 

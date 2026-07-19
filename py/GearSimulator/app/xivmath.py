@@ -174,7 +174,7 @@ RACE_STATS[DEFAULT_RACE] = _compute_average_race_stats()
 def normalize_supported_level(level: Optional[int]) -> int:
     try:
         normalized = int(level or CURRENT_MAX_LEVEL)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return CURRENT_MAX_LEVEL
     if normalized in LEVEL_STATS:
         return normalized

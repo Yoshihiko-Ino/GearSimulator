@@ -1,9 +1,9 @@
 GearSimulator Release
-Version: 2.0.0
+Version: 2.0.1
 
 配布ファイル:
 - GearSimulator.exe
-- GearSimulator_v2.0.0_py.zip
+- GearSimulator_v2.0.1_py.zip
 - SHA256SUMS.txt
 
 対応環境:

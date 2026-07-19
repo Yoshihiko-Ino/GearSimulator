@@ -52,7 +52,7 @@ def decode_progress_message(message: str) -> Tuple[str, Optional[int], Optional[
         raw_detail = ""
     try:
         detail_value = int(raw_value) if raw_value != "" else None
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         detail_value = None
     detail_message = raw_detail or None
     return payload, detail_value, detail_message

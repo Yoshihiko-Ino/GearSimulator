@@ -25,7 +25,7 @@ def _has_combat_food_bonus(bonuses: Dict[int, FoodBonus]) -> bool:
         try:
             if int(stat_id) in COMBAT_FOOD_BONUS_STATS:
                 return True
-        except Exception:
+        except (TypeError, ValueError, OverflowError):
             continue
     return False
 
@@ -248,7 +248,7 @@ class XivGearClient:
             for key, bonus in bonuses.items():
                 try:
                     stat_id = int(key)
-                except Exception:
+                except (TypeError, ValueError, OverflowError):
                     continue
                 bonus_objects[stat_id] = FoodBonus(
                     base_param=stat_id,
@@ -395,6 +395,11 @@ class XivGearClient:
             if progress and idx % 200 == 0:
                 pct = int((idx / max(1, len(raw_items))) * 100)
                 progress(min(pct, 95), "装備データを解析中")
+
+        if stop_event and stop_event.is_set():
+            # A partial item list must never replace a complete cache. The worker
+            # treats this return as cancelled and discards it.
+            return []
 
         payload = [
             {
